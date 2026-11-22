@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rid Uninstaller",
+  "version": "0.1.0",
+  "identifier": "com.rid.uninstaller",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Rid Uninstaller",
+        "width": 1000,
+        "height": 660,
+        "minWidth": 760,
+        "minHeight": 440
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data: http://icon.localhost; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "publisher": "Rid",
+    "shortDescription": "Uninstall programs completely",
+    "resources": {
+      "../../target/release/rid.exe": "rid.exe",
+      "../../driver/rid-monitor/target/release/rid_monitor.dll": "RidMonitor.sys"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["SimpChinese", "English"]
+      }
+    }
+  }
+}

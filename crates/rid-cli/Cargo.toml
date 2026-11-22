@@ -1,0 +1,13 @@
+[package]
+name = "rid-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rid"
+path = "src/main.rs"
+
+[dependencies]
+rid-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true

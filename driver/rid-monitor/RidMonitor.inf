@@ -1,0 +1,67 @@
+;
+; RidMonitor - install tracing minifilter of Rid Uninstaller.
+;
+; The altitude below is a development placeholder. Before release, request one from
+; Microsoft (fsfcomm@microsoft.com, load order group "FSFilter Activity Monitor") and put
+; the assigned value here, in src\lib.rs (ALTITUDE) and in crates\rid-core\src\driver.rs.
+;
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = "ActivityMonitor"
+ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
+Provider    = %Provider%
+DriverVer   = 11/23/2026,0.1.0.0
+CatalogFile = RidMonitor.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir      = 12
+RidMonitor.Files    = 12
+
+[DefaultInstall.NTamd64]
+OptionDesc = %ServiceDescription%
+CopyFiles  = RidMonitor.Files
+
+[DefaultInstall.NTamd64.Services]
+AddService = %ServiceName%,,RidMonitor.Service
+
+[DefaultUninstall.NTamd64]
+LegacyUninstall = 1
+DelFiles        = RidMonitor.Files
+
+[DefaultUninstall.NTamd64.Services]
+DelService = %ServiceName%,0x200
+
+[RidMonitor.Service]
+DisplayName    = %ServiceName%
+Description    = %ServiceDescription%
+ServiceBinary  = %12%\RidMonitor.sys
+Dependencies   = "FltMgr"
+ServiceType    = 2 ; SERVICE_FILE_SYSTEM_DRIVER
+StartType      = 3 ; SERVICE_DEMAND_START
+ErrorControl   = 1 ; SERVICE_ERROR_NORMAL
+LoadOrderGroup = "FSFilter Activity Monitor"
+AddReg         = RidMonitor.AddRegistry
+
+[RidMonitor.AddRegistry]
+HKR,"Instances","DefaultInstance",0x00000000,%DefaultInstance%
+HKR,"Instances\"%DefaultInstance%,"Altitude",0x00000000,%Altitude%
+HKR,"Instances\"%DefaultInstance%,"Flags",0x00010001,0
+
+[RidMonitor.Files]
+RidMonitor.sys
+
+[SourceDisksFiles]
+RidMonitor.sys = 1,,
+
+[SourceDisksNames]
+1 = %DiskName%,,,
+
+[Strings]
+Provider           = "Rid"
+ServiceName        = "RidMonitor"
+ServiceDescription = "Records the files and registry items a setup program creates, for Rid Uninstaller's Install and Trace."
+DiskName           = "RidMonitor installation disk"
+DefaultInstance    = "RidMonitor Instance"
+Altitude           = "385210"
