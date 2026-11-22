@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { actionItems, canUninstall, jump } from "./actions";
-import { type App, formatSize, iconUrl } from "./api";
+import { type App, SOURCES, formatSize, iconUrl } from "./api";
 import { type MsgKey, lang, t } from "./i18n";
 import MenuList from "./MenuList.vue";
 import { type SortKey, prefs } from "./prefs";
@@ -214,6 +214,10 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
           <button type="button" class="btn" @click="start('force')">{{ t("act.force") }}</button>
         </div>
         <dl class="props">
+          <template v-if="SOURCES[current.source]">
+            <dt>{{ t("col.source") }}</dt>
+            <dd>{{ SOURCES[current.source] }}</dd>
+          </template>
           <template v-if="current.version">
             <dt>{{ t("col.version") }}</dt>
             <dd>{{ current.version }}</dd>

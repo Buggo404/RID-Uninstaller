@@ -114,6 +114,12 @@ pub fn quiet_command(app: &App) -> Option<String> {
     if app.id.starts_with("APPX:") {
         return Some(String::new()); // package removal has no UI to begin with
     }
+    if app.id.starts_with("STEAM:") {
+        return None; // Steam always asks
+    }
+    if app.id.starts_with("SCOOP:") || app.id.starts_with("CHOCO:") {
+        return Some(app.uninstall_string.clone()); // package managers do not ask
+    }
     if !app.quiet_uninstall_string.is_empty() {
         return Some(app.quiet_uninstall_string.clone());
     }
@@ -133,7 +139,22 @@ pub fn quiet_command(app: &App) -> Option<String> {
     head[..read].windows(nsis.len()).any(|w| w == nsis).then(|| format!("{} /S", app.uninstall_string))
 }
 
+/// Hands the removal to Steam, which asks the user itself, and waits until Steam has dropped
+/// the game's record. Steam stays running afterwards, so its processes cannot be waited for.
+fn steam_uninstall(app: &App, cancel: &AtomicBool) -> io::Result<Outcome> {
+    let manifest = crate::sources::steam_manifest(app).ok_or_else(|| io::Error::other("not a Steam game"))?;
+    let exe = crate::cmdline::exe_of(&app.uninstall_string).ok_or_else(|| io::Error::other("Steam was not found"))?;
+    std::process::Command::new(exe).arg(crate::cmdline::args_of(&app.uninstall_string)).spawn()?;
+    while manifest.exists() && !cancel.load(Ordering::Relaxed) {
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    Ok(Outcome { exit_code: 0, cancelled: manifest.exists() })
+}
+
 pub fn uninstall(app: &App, quiet: bool, cancel: &AtomicBool) -> io::Result<Outcome> {
+    if app.id.starts_with("STEAM:") {
+        return steam_uninstall(app, cancel);
+    }
     match app.id.strip_prefix("APPX:") {
         Some(full_name) => remove_package(full_name),
         None if app.uninstall_string.is_empty() => Err(io::Error::other("this program has no uninstaller")),

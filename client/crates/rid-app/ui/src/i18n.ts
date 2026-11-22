@@ -273,6 +273,8 @@ const en = {
   "win.minimize": "Minimize",
   "win.maximize": "Maximize",
   "win.close": "Close",
+  "cat.packages": "Package managers",
+  "col.source": "Source",
 };
 
 const zh: Record<keyof typeof en, string> = {
@@ -547,6 +549,8 @@ const zh: Record<keyof typeof en, string> = {
   "win.minimize": "最小化",
   "win.maximize": "最大化",
   "win.close": "关闭",
+  "cat.packages": "包管理器",
+  "col.source": "来源",
 };
 
 export type MsgKey = keyof typeof en;

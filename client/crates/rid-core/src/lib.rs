@@ -11,6 +11,7 @@ pub mod procs;
 pub mod safety;
 pub mod scan;
 pub mod shell;
+pub mod sources;
 pub mod startup;
 pub mod tasks;
 pub mod trace;

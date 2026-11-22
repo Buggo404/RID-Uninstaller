@@ -1,4 +1,4 @@
 target/
 node_modules/
 dist/
-crates/rid-app/gen/
+client/crates/rid-app/gen/

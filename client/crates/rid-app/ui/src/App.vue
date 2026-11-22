@@ -57,6 +57,7 @@ const glyphs = {
   system: "M3 5h18v11H3z M8 20h8 M12 16v4",
   hidden: "M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z M4 4l16 16",
   store: "M5 8h14l-1 12H6z M9 8V6a3 3 0 0 1 6 0v2",
+  packages: "M4 8l8-4 8 4-8 4z M4 8v8l8 4 8-4V8 M12 12v8",
   recent: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
   trace: "M12 3v10 M8 9l4 4 4-4 M4 17v3h16v-3",
 };
@@ -66,6 +67,7 @@ const categories: { id: ListCategory; glyph: keyof typeof glyphs }[] = [
   { id: "system", glyph: "system" },
   { id: "hidden", glyph: "hidden" },
   { id: "store", glyph: "store" },
+  { id: "packages", glyph: "packages" },
 ];
 
 const systemTools = ["programs", "features", "restore", "security", "sysprops", "sysinfo", "defrag", "services", "tasks"] as const;
@@ -248,6 +250,7 @@ onUnmounted(() => removeEventListener("keydown", onKey));
       <div class="nav-label">{{ t("nav.programs") }}</div>
       <button
         v-for="c in categories"
+        v-show="c.id !== 'packages' || counts.packages"
         :key="c.id"
         type="button"
         class="nav"

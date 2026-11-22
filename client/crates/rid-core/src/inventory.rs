@@ -22,12 +22,28 @@ pub enum Category {
     System,
     Hidden,
     Store,
+    /// Installed by a package manager (Scoop, Chocolatey).
+    Packages,
+}
+
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Source {
+    /// The Windows installed-programs list.
+    #[default]
+    Registry,
+    Store,
+    Steam,
+    Scoop,
+    Chocolatey,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct App {
-    /// Stable across runs: `HKLM:64:<key>`, `HKCU:32:<key>` or `APPX:<package full name>`.
+    /// Stable across runs: `HKLM:64:<key>`, `HKCU:32:<key>`, `APPX:<package full name>`,
+    /// `STEAM:<app id>`, `SCOOP:<name>` or `CHOCO:<package id>`.
     pub id: String,
+    pub source: Source,
     pub name: String,
     pub version: String,
     pub publisher: String,
@@ -82,6 +98,8 @@ pub fn list() -> Inventory {
         Err(e) => inv.warnings.push(format!("AppX: {e}")),
     }
     fill_msi_locations(&mut inv.apps);
+    let extra = crate::sources::list(&inv.apps);
+    inv.apps.extend(extra);
     inv.apps.sort_by_cached_key(|a| a.name.to_lowercase());
     inv
 }
@@ -166,6 +184,7 @@ fn registry_app(key: &RegKey, hive: &str, key_name: &str, is_32bit: bool) -> Opt
         ),
         is_msi,
         is_32bit,
+        source: if key_name.starts_with("Steam App ") { Source::Steam } else { Source::Registry },
         traced: false,
         broken: !is_msi && is_stale(&text("UninstallString"), text("InstallLocation").trim_matches('"')),
     })
@@ -240,9 +259,15 @@ fn appx_app(pkg: &Package) -> windows::core::Result<Option<App>> {
         reg_path: String::new(),
         is_msi: false,
         is_32bit: false,
+        source: Source::Store,
         traced: false,
         broken: false,
     }))
+}
+
+/// Seconds since 1970-01-01 (UTC) to `YYYY-MM-DD`.
+pub(crate) fn date_from_unix(secs: u64) -> String {
+    date_from_filetime_ticks(secs as i64 * 10_000_000 + 116_444_736_000_000_000)
 }
 
 /// 100 ns ticks since 1601-01-01 (UTC) to `YYYY-MM-DD`.

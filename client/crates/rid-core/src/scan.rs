@@ -220,6 +220,22 @@ pub fn owner_of_shortcut<'a>(lnk: &Path, all: &'a [App], roots: &Roots) -> Optio
 }
 
 pub fn scan(app: &App, all: &[App], roots: &Roots) -> Vec<Leftover> {
+    // Chocolatey removes its own package folder; what a package installed shows up in the
+    // list as a program of its own and is cleaned up there.
+    if app.id.starts_with("CHOCO:") {
+        return Vec::new();
+    }
+    // Scoop keeps everything of an app in two folders: the app itself and its persisted data.
+    if let Some(name) = app.id.strip_prefix("SCOOP:") {
+        let app_dir = PathBuf::from(&app.install_location);
+        let persist = app_dir.parent().and_then(Path::parent).map(|root| root.join("persist").join(name));
+        return [(Some(app_dir), Evidence::InstallLocation), (persist, Evidence::NameMatch)]
+            .into_iter()
+            .filter_map(|(dir, evidence)| Some((safety::resolve(&dir?), evidence)))
+            .filter(|(dir, _)| dir.is_dir() && safety::check_path(dir, roots, &[]).is_ok())
+            .map(|(dir, evidence)| leftover(Target::Dir { path: dir.to_string_lossy().into_owned() }, evidence, true))
+            .collect();
+    }
     let keys = names::name_keys(&app.name);
     let publisher = names::publisher_key(&app.publisher);
     let others = other_program_dirs(&[&app.id], all);

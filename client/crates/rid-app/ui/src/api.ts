@@ -1,9 +1,13 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
-export type Category = "apps" | "system" | "hidden" | "store";
+export type Category = "apps" | "system" | "hidden" | "store" | "packages";
+
+/** Where a list entry comes from; shown as-is, these are product names. */
+export const SOURCES = { registry: "", store: "Microsoft Store", steam: "Steam", scoop: "Scoop", chocolatey: "Chocolatey" };
 
 export interface App {
   id: string;
+  source: keyof typeof SOURCES;
   name: string;
   version: string;
   publisher: string;
