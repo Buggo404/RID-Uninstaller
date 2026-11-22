@@ -52,6 +52,7 @@ export const api = {
   quarantineList: () => invoke<BatchInfo[]>("quarantine_list"),
   quarantineRestore: (id: string) => invoke<string[]>("quarantine_restore", { id }),
   quarantinePurge: (id: string) => invoke<void>("quarantine_purge", { id }),
+  quarantinePurgeOld: (days: number) => invoke<number>("quarantine_purge_old", { days }),
   startupList: () => invoke<StartupItem[]>("startup_list"),
   startupSetEnabled: (source: StartupSource, name: string, enabled: boolean) =>
     invoke<void>("startup_set_enabled", { source, name, enabled }),

@@ -10,6 +10,8 @@ const defaults = {
   mark32: true,
   confirmUninstall: true,
   quietUninstall: false,
+  /** How long removed items stay restorable. */
+  quarantine: "30" as "7" | "30" | "90" | "never",
   columns: { size: true, date: true, publisher: false, version: false, traced: true },
   showUpdates: true,
   updates: "collapsed" as "collapsed" | "expanded" | "always",
@@ -39,4 +41,5 @@ export async function loadPrefs() {
     }
   }
   watch(prefs, (p) => api.savePrefs(p).catch(console.error), { deep: true });
+  if (prefs.quarantine !== "never") api.quarantinePurgeOld(Number(prefs.quarantine)).catch(console.error);
 }

@@ -563,3 +563,46 @@ mark {
     opacity: 0.5;
   }
 }
+
+/* Window controls: the header doubles as the title bar */
+
+.spacer.drag {
+  align-self: stretch;
+}
+
+.window-buttons {
+  display: flex;
+  align-self: stretch;
+  margin: 0 -12px 0 4px;
+}
+
+.window-buttons button {
+  display: grid;
+  place-content: center;
+  width: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s;
+}
+
+.window-buttons svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+
+.window-buttons button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.window-buttons button.close:hover {
+  background: #e5484d;
+  color: #fff;
+}

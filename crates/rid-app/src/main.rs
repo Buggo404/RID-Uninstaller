@@ -16,9 +16,6 @@ use serde_json::Value;
 use tauri::Emitter;
 use tauri::http::{Response, StatusCode};
 
-/// Removed items stay restorable for this long.
-const QUARANTINE_DAYS: u64 = 30;
-
 type CmdResult<T = ()> = Result<T, String>;
 
 fn err(e: impl ToString) -> String {
@@ -394,6 +391,13 @@ fn quarantine_purge(id: String) -> CmdResult {
     ops::purge(&id).map_err(err)
 }
 
+/// Drops quarantine batches older than `days`. The retention period is the user's choice,
+/// so the window asks for this once its preferences are loaded.
+#[tauri::command(async)]
+fn quarantine_purge_old(days: u64) -> usize {
+    ops::purge_older_than(days)
+}
+
 #[tauri::command(async)]
 fn startup_list(state: State) -> CmdResult<Vec<startup::Item>> {
     let mut items = startup::list(&Roots::from_system());
@@ -447,7 +451,6 @@ fn icon_response(path: &str) -> Response<Vec<u8>> {
 }
 
 fn main() {
-    std::thread::spawn(|| ops::purge_older_than(QUARANTINE_DAYS));
     // A few workers, however many icons the list asks for: one thread per request would
     // mean hundreds of threads on a machine with many programs.
     let (icon_jobs, queue) = std::sync::mpsc::channel::<(String, tauri::UriSchemeResponder)>();
@@ -491,6 +494,7 @@ fn main() {
             quarantine_list,
             quarantine_restore,
             quarantine_purge,
+            quarantine_purge_old,
             startup_list,
             startup_set_enabled,
             startup_delete,

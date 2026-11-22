@@ -145,7 +145,7 @@ const en = {
   "wiz.done": "%s items removed.",
   "wiz.doneFailed": "%s items could not be removed:",
   "wiz.pending": "In use. Windows moves these into quarantine at the next restart:",
-  "wiz.undo": "Moved to quarantine. Restorable for 30 days under Removal History.",
+  "wiz.undo": "Moved to quarantine. Restore it under Removal History.",
   "wiz.saveLog": "Save Uninstall Log",
   "wiz.exportXml": "Export to XML",
   "wiz.logFilter": "Log Files",
@@ -265,6 +265,14 @@ const en = {
   "nav.programs": "Programs",
   "nav.tools": "Tools",
   "nav.menu": "Menu",
+  "prefs.quarantine": "Keep removed items for:",
+  "prefs.q7": "7 days",
+  "prefs.q30": "30 days",
+  "prefs.q90": "90 days",
+  "prefs.qnever": "Until I delete them",
+  "win.minimize": "Minimize",
+  "win.maximize": "Maximize",
+  "win.close": "Close",
 };
 
 const zh: Record<keyof typeof en, string> = {
@@ -411,7 +419,7 @@ const zh: Record<keyof typeof en, string> = {
   "wiz.done": "已删除 %s 项。",
   "wiz.doneFailed": "有 %s 项未能删除：",
   "wiz.pending": "文件正在使用中，Windows 会在下次重启时把它们移入隔离区：",
-  "wiz.undo": "已移入隔离区，30 天内可在“删除记录”中还原。",
+  "wiz.undo": "已移入隔离区，可在“删除记录”中还原。",
   "wiz.saveLog": "保存卸载日志",
   "wiz.exportXml": "导出为 XML",
   "wiz.logFilter": "日志文件",
@@ -531,6 +539,14 @@ const zh: Record<keyof typeof en, string> = {
   "nav.programs": "程序",
   "nav.tools": "工具",
   "nav.menu": "菜单",
+  "prefs.quarantine": "已删除内容的保留时间：",
+  "prefs.q7": "7 天",
+  "prefs.q30": "30 天",
+  "prefs.q90": "90 天",
+  "prefs.qnever": "一直保留，手动清理",
+  "win.minimize": "最小化",
+  "win.maximize": "最大化",
+  "win.close": "关闭",
 };
 
 export type MsgKey = keyof typeof en;

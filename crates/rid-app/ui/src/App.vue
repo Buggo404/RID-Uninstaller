@@ -36,6 +36,7 @@ import { prompt } from "./ui";
 import UninstallerView from "./UninstallerView.vue";
 import Wizard from "./Wizard.vue";
 
+const win = getCurrentWindow();
 const openMenu = ref(false);
 const searchInput = ref<HTMLInputElement>();
 const showPrefs = ref(false);
@@ -75,7 +76,7 @@ const menus = computed<{ label: string; items: MenuItem[] }[]>(() => [
     items: [
       { label: t("menu.export"), key: "Ctrl+S", run: exportHtml },
       { sep: true },
-      { label: t("menu.exit"), run: () => getCurrentWindow().close() },
+      { label: t("menu.exit"), run: () => win.close() },
     ],
   },
   { label: t("menu.action"), items: view.value === "uninstaller" ? actionItems.value : [] },
@@ -231,9 +232,9 @@ onUnmounted(() => removeEventListener("keydown", onKey));
 <template>
   <div class="app" @click="openMenu = false">
     <nav class="sidebar">
-      <div class="brand">
+      <div class="brand" data-tauri-drag-region>
         <span class="brand-mark" aria-hidden="true">R</span>
-        <span>Rid Uninstaller</span>
+        <span data-tauri-drag-region>Rid Uninstaller</span>
         <div class="menu-anchor">
           <button type="button" class="icon-btn" aria-haspopup="menu" :aria-expanded="openMenu" :aria-label="t('nav.menu')" @click.stop="openMenu = !openMenu">
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h.01M8 8h.01M13 8h.01" /></svg>
@@ -293,8 +294,8 @@ onUnmounted(() => removeEventListener("keydown", onKey));
     </nav>
 
     <div class="main">
-      <header class="header">
-        <h1>{{ title }}</h1>
+      <header class="header" data-tauri-drag-region>
+        <h1 data-tauri-drag-region>{{ title }}</h1>
         <div v-if="view === 'startup'" class="seg" role="tablist">
           <button
             v-for="g in startupGroups"
@@ -308,7 +309,7 @@ onUnmounted(() => removeEventListener("keydown", onKey));
             {{ t(`st.${g}`) }}
           </button>
         </div>
-        <span class="spacer"></span>
+        <span class="spacer drag" data-tauri-drag-region></span>
         <div class="search">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 12A5 5 0 1 0 7 2a5 5 0 0 0 0 10zM14 14l-3.5-3.5" /></svg>
           <input
@@ -326,6 +327,17 @@ onUnmounted(() => removeEventListener("keydown", onKey));
         <button type="button" class="icon-btn" :title="`${t('tb.refresh')} (F5)`" :aria-label="t('tb.refresh')" @click="reload">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.refresh" /></svg>
         </button>
+        <div class="window-buttons">
+          <button type="button" :aria-label="t('win.minimize')" @click="win.minimize()">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" /></svg>
+          </button>
+          <button type="button" :aria-label="t('win.maximize')" @click="win.toggleMaximize()">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5h7v7h-7z" /></svg>
+          </button>
+          <button type="button" class="close" :aria-label="t('win.close')" @click="win.close()">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" /></svg>
+          </button>
+        </div>
       </header>
 
       <UninstallerView v-if="view === 'uninstaller'" ref="uninstaller" />

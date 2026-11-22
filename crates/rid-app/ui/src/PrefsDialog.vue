@@ -36,6 +36,8 @@ const wizard = computed(() => [
   { value: "off" as const, label: t("prefs.wizardOff") },
 ]);
 
+const retention = computed(() => (["7", "30", "90", "never"] as const).map((value) => ({ value, label: t(`prefs.q${value}`) })));
+
 onMounted(() => {
   dialog.value?.showModal();
   api.contextMenuEnabled().then((on) => (contextMenu.value = on), report);
@@ -67,6 +69,8 @@ onMounted(() => {
       <RSelect v-model="prefs.updates" :options="updates" :disabled="!prefs.showUpdates" />
       <span>{{ t("prefs.wizard") }}</span>
       <RSelect v-model="prefs.wizard" :options="wizard" />
+      <span>{{ t("prefs.quarantine") }}</span>
+      <RSelect v-model="prefs.quarantine" :options="retention" />
     </div>
 
     <form method="dialog" class="dialog-buttons">
