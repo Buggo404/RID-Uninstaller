@@ -143,6 +143,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let _ = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER).delete_subkey_all(format!("Software\\{key}"));
 
+        eprintln!("DIAG temp {d} drives {:?}", std::process::Command::new("fltmc").output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()));
         let changes: Vec<&Change> = recording.events.iter().map(|e| &e.change).collect();
         let has = |wanted: Change| assert!(changes.contains(&&wanted), "missing {wanted:?} in {changes:#?}");
         assert_eq!(recording.dropped, 0);

@@ -144,11 +144,14 @@ struct State {
     keys: HashMap<u64, String>,
     layouts: HashMap<(GUID, u16, u8), Layout>,
     out: Sender<Event>,
+    seen: std::collections::BTreeMap<(char, u16, bool), u32>,
+    samples: u32,
 }
+impl Drop for State { fn drop(&mut self) { eprintln!("DIAG SEEN {:?}", self.seen); } }
 
 impl Shared {
     pub fn new(follow_msiexec: bool, out: Sender<Event>) -> Arc<Shared> {
-        let state = State { pids: HashSet::new(), files: HashMap::new(), keys: HashMap::new(), layouts: HashMap::new(), out };
+        let state = State { pids: HashSet::new(), files: HashMap::new(), keys: HashMap::new(), layouts: HashMap::new(), out, seen: Default::default(), samples: 0 };
         Arc::new(Shared { names: Names::new(), follow_msiexec, state: Mutex::new(state) })
     }
 
@@ -193,6 +196,9 @@ impl State {
     fn handle(&mut self, record: &EVENT_RECORD, shared: &Shared) {
         let header = &record.EventHeader;
         let (provider, id, pid) = (header.ProviderId, header.EventDescriptor.Id, header.ProcessId);
+        let tag = if provider == PROCESS { 'P' } else if provider == FILE { 'F' } else if provider == REGISTRY { 'R' } else { '?' };
+        *self.seen.entry((tag, id, self.pids.contains(&pid))).or_default() += 1;
+        if tag == 'F' && id != 12 && self.samples < 12 { self.samples += 1; let l = fields::layout(record); let v = l.as_ref().map(|l| fields::values(l, record)); eprintln!("DIAG F{id} pid {pid} tid {} traced {:?}: {:?}", header.ThreadId, self.pids, l.as_ref().map(|l| l.iter().map(|(n, _)| n.as_str()).zip(v.iter().flatten()).collect::<Vec<_>>())); }
         // Nearly everything Windows reports is about processes that are not traced and ends here.
         let wanted = match provider {
             PROCESS => matches!(id, 1 | 2),
