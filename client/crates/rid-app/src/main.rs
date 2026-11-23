@@ -298,7 +298,10 @@ struct Release {
 /// The updater for this program's server. Whatever the server says, an installer is only
 /// accepted when its signature matches the key built into the program (tauri.conf.json).
 fn updater(app: &tauri::AppHandle) -> CmdResult<tauri_plugin_updater::Updater> {
-    let endpoint = format!("{}/v1/update", rid_core::SERVER).parse().map_err(err)?;
+    // Each check asks a URL of its own: a cache in front of the server, whose rules are not ours
+    // to set, then cannot answer with a release it was told about earlier.
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let endpoint = format!("{}/v1/update?t={now}", rid_core::SERVER).parse().map_err(err)?;
     app.updater_builder().endpoints(vec![endpoint]).map_err(err)?.build().map_err(err)
 }
 
