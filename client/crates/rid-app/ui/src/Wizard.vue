@@ -97,7 +97,7 @@ const scan = () =>
   guarded(async () => {
     step.value = "scanning";
     const ids = scanIds.value;
-    found.value = (await api.scanLeftovers(ids, prefs.rulesServer.trim())).map((l) => ({ ...l, checked: l.certain }));
+    found.value = (await api.scanLeftovers(ids)).map((l) => ({ ...l, checked: l.certain }));
     procs.value = await api.processes(ids);
     step.value = found.value.length ? "review" : "done";
   });

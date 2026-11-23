@@ -1,3 +1,10 @@
+/// The server that answers for leftover rules and new versions.
+// shortcut: a release build must set RID_SERVER; without it this is the server of a local test set-up.
+pub const SERVER: &str = match option_env!("RID_SERVER") {
+    Some(address) => address,
+    None => "http://127.0.0.1:8080",
+};
+
 pub mod cmdline;
 pub mod driver;
 pub mod icons;

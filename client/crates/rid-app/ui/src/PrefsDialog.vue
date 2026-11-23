@@ -2,13 +2,17 @@
 import { computed, onMounted, ref } from "vue";
 import { report } from "./actions";
 import { api } from "./api";
-import { t } from "./i18n";
+import { type MsgKey, t } from "./i18n";
 import { prefs } from "./prefs";
 import RSelect from "./RSelect.vue";
 
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const contextMenu = ref(false);
+
+// A new group of settings is one more entry here and one more block in the template.
+const categories = ["interface", "list", "uninstaller"] as const;
+const category = ref<(typeof categories)[number]>("interface");
 
 function toggleContextMenu() {
   const want = !contextMenu.value;
@@ -46,38 +50,62 @@ onMounted(() => {
 
 <template>
   <dialog ref="dialog" class="dialog prefs" aria-labelledby="prefs-title" @close="emit('close')">
-    <h2 id="prefs-title">{{ t("prefs.title") }}</h2>
+    <div class="prefs-body">
+      <div class="prefs-nav" role="tablist" aria-orientation="vertical">
+        <h2 id="prefs-title">{{ t("prefs.title") }}</h2>
+        <button
+          v-for="c in categories"
+          :key="c"
+          type="button"
+          class="nav"
+          role="tab"
+          :class="{ active: category === c }"
+          :aria-selected="category === c"
+          @click="category = c"
+        >
+          {{ t(`prefs.${c}` as MsgKey) }}
+        </button>
+      </div>
 
-    <h3>{{ t("prefs.interface") }}</h3>
-    <div class="form">
-      <span>{{ t("prefs.language") }}</span>
-      <RSelect v-model="prefs.lang" :options="languages" />
-      <span>{{ t("prefs.scheme") }}</span>
-      <RSelect v-model="prefs.theme" :options="themes" />
+      <div class="prefs-pane" role="tabpanel">
+        <template v-if="category === 'interface'">
+          <div class="form">
+            <span>{{ t("prefs.language") }}</span>
+            <RSelect v-model="prefs.lang" :options="languages" />
+            <span>{{ t("prefs.scheme") }}</span>
+            <RSelect v-model="prefs.theme" :options="themes" />
+          </div>
+          <label class="check"><input v-model="prefs.compact" type="checkbox" /> {{ t("prefs.compact") }}</label>
+          <label class="check"><input type="checkbox" :checked="contextMenu" @change="toggleContextMenu" /> {{ t("prefs.contextMenu") }}</label>
+        </template>
+
+        <template v-else-if="category === 'list'">
+          <label class="check"><input v-model="prefs.mark32" type="checkbox" /> {{ t("prefs.mark32") }}</label>
+          <label class="check"><input v-model="prefs.highlightRecent" type="checkbox" /> {{ t("prefs.highlightRecent") }}</label>
+          <label class="check"><input v-model="prefs.showUpdates" type="checkbox" /> {{ t("prefs.showUpdates") }}</label>
+          <div class="form">
+            <span>{{ t("prefs.updates") }}</span>
+            <RSelect v-model="prefs.updates" :options="updates" :disabled="!prefs.showUpdates" />
+          </div>
+        </template>
+
+        <template v-else>
+          <label class="check"><input v-model="prefs.confirmUninstall" type="checkbox" /> {{ t("prefs.confirmUninstall") }}</label>
+          <label class="check"><input v-model="prefs.quietUninstall" type="checkbox" /> {{ t("prefs.quietUninstall") }}</label>
+          <div class="form">
+            <span>{{ t("prefs.wizard") }}</span>
+            <RSelect v-model="prefs.wizard" :options="wizard" />
+            <span>{{ t("prefs.quarantine") }}</span>
+            <RSelect v-model="prefs.quarantine" :options="retention" />
+          </div>
+        </template>
+
+        <span class="spacer"></span>
+        <form method="dialog" class="dialog-buttons">
+          <span class="spacer"></span>
+          <button class="btn primary" autofocus>{{ t("btn.ok") }}</button>
+        </form>
+      </div>
     </div>
-    <label class="check"><input v-model="prefs.compact" type="checkbox" /> {{ t("prefs.compact") }}</label>
-    <label class="check"><input v-model="prefs.mark32" type="checkbox" /> {{ t("prefs.mark32") }}</label>
-    <label class="check"><input type="checkbox" :checked="contextMenu" @change="toggleContextMenu" /> {{ t("prefs.contextMenu") }}</label>
-
-    <h3>{{ t("prefs.uninstaller") }}</h3>
-    <label class="check"><input v-model="prefs.confirmUninstall" type="checkbox" /> {{ t("prefs.confirmUninstall") }}</label>
-    <label class="check"><input v-model="prefs.quietUninstall" type="checkbox" /> {{ t("prefs.quietUninstall") }}</label>
-    <label class="check"><input v-model="prefs.showUpdates" type="checkbox" /> {{ t("prefs.showUpdates") }}</label>
-    <label class="check"><input v-model="prefs.highlightRecent" type="checkbox" /> {{ t("prefs.highlightRecent") }}</label>
-    <div class="form">
-      <span>{{ t("prefs.updates") }}</span>
-      <RSelect v-model="prefs.updates" :options="updates" :disabled="!prefs.showUpdates" />
-      <span>{{ t("prefs.wizard") }}</span>
-      <RSelect v-model="prefs.wizard" :options="wizard" />
-      <span>{{ t("prefs.quarantine") }}</span>
-      <RSelect v-model="prefs.quarantine" :options="retention" />
-      <label for="prefs-rules">{{ t("prefs.rulesServer") }}</label>
-      <input id="prefs-rules" v-model="prefs.rulesServer" class="input" type="url" placeholder="https://" spellcheck="false" />
-    </div>
-
-    <form method="dialog" class="dialog-buttons">
-      <span class="spacer"></span>
-      <button class="btn primary" autofocus>{{ t("btn.ok") }}</button>
-    </form>
   </dialog>
 </template>

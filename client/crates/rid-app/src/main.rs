@@ -284,8 +284,8 @@ fn app_version() -> &'static str {
 
 /// The newer release `server` offers, if any.
 #[tauri::command(async)]
-fn check_update(server: String) -> CmdResult<Option<update::Release>> {
-    update::check(&server, env!("CARGO_PKG_VERSION"))
+fn check_update() -> CmdResult<Option<update::Release>> {
+    update::check(rid_core::SERVER, env!("CARGO_PKG_VERSION"))
 }
 
 #[tauri::command]
@@ -358,7 +358,7 @@ struct Found {
 }
 
 #[tauri::command(async)]
-fn scan_leftovers(state: State, ids: Vec<String>, rules_server: Option<String>) -> CmdResult<Vec<Found>> {
+fn scan_leftovers(state: State, ids: Vec<String>) -> CmdResult<Vec<Found>> {
     let apps = known(&state, &ids)?;
     let installed = inventory::list_full().apps;
     let roots = Roots::from_system();
@@ -372,10 +372,7 @@ fn scan_leftovers(state: State, ids: Vec<String>, rules_server: Option<String>) 
         let searched = if app.id.starts_with("TRACE:") { Vec::new() } else { scan::scan(app, &installed, &roots) };
         // Package managers keep to their own folders; rules are for ordinary programs.
         let ordinary = !["TRACE:", "SCOOP:", "CHOCO:"].iter().any(|p| app.id.starts_with(p));
-        let nominated = match rules_server.as_deref().filter(|s| ordinary && !s.is_empty()) {
-            Some(server) => rules::leftovers(&rules::fetch(server, app), &roots, &others),
-            None => Vec::new(),
-        };
+        let nominated = if ordinary { rules::leftovers(&rules::fetch(rid_core::SERVER, app), &roots, &others) } else { Vec::new() };
         for leftover in recorded.into_iter().chain(searched).chain(nominated) {
             // Two programs of one batch can point at the same item; it is listed once.
             if !found.iter().any(|f| scan::covered_by(&leftover.target, &f.leftover.target)) {

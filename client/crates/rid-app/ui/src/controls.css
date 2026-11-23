@@ -665,3 +665,38 @@ input:is([type="checkbox"], [type="radio"]):disabled {
   padding: 10px 0;
   border-top: 1px solid var(--border);
 }
+
+/* Preferences: categories on the left, the chosen one's settings on the right */
+
+.dialog.prefs {
+  width: min(580px, 92vw);
+  padding: 0;
+}
+
+.prefs-body {
+  display: grid;
+  grid-template-columns: 156px 1fr;
+  min-height: 330px;
+}
+
+.prefs-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 20px 8px 12px;
+  border-right: 1px solid var(--border);
+  border-radius: 12px 0 0 12px;
+  background: var(--side);
+}
+
+.prefs-nav h2 {
+  padding: 0 8px;
+}
+
+.prefs-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 20px;
+}

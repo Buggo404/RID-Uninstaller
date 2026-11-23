@@ -42,7 +42,7 @@ export const api = {
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   appVersion: () => invoke<string>("app_version"),
   clipboardText: () => invoke<string>("clipboard_text"),
-  checkUpdate: (server: string) => invoke<{ version: string; url: string; notes: string } | null>("check_update", { server }),
+  checkUpdate: () => invoke<{ version: string; url: string; notes: string } | null>("check_update"),
   openRegistry: (keyPath: string) => invoke<void>("open_registry", { keyPath }),
   systemTool: (name: string) => invoke<void>("system_tool", { name }),
   loadPrefs: () => invoke<Record<string, unknown> | null>("load_prefs"),
@@ -52,7 +52,7 @@ export const api = {
     invoke<RunResult>("uninstall_run", { id, modify, quiet }),
   quietSupport: (ids: string[]) => invoke<boolean[]>("quiet_support", { ids }),
   uninstallCancel: () => invoke<void>("uninstall_cancel"),
-  scanLeftovers: (ids: string[], rulesServer: string) => invoke<Leftover[]>("scan_leftovers", { ids, rulesServer }),
+  scanLeftovers: (ids: string[]) => invoke<Leftover[]>("scan_leftovers", { ids }),
   processes: (ids: string[]) => invoke<Proc[]>("processes", { ids }),
   killProcesses: (ids: string[], pids: number[]) => invoke<string[]>("kill_processes", { ids, pids }),
   removeLeftovers: (label: string, ids: string[], targets: Target[]) =>

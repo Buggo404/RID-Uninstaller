@@ -43,7 +43,6 @@ const en = {
   "upd.nav": "Version %s available",
   "upd.found": "Version %s is available.\n%s\n\nOpen the download page?",
   "upd.latest": "Version %s is the latest.",
-  "upd.noServer": "Set the server address in Preferences to check for updates.",
   "tb.uninstaller": "Uninstaller",
   "tb.startup": "Startup",
   "tb.refresh": "Refresh",
@@ -293,7 +292,7 @@ const en = {
   "cat.packages": "Package managers",
   "col.source": "Source",
   "ev.rule": "rules database",
-  "prefs.rulesServer": "Server for rules and updates (empty = off):",
+  "prefs.list": "List",
 };
 
 const zh: Record<keyof typeof en, string> = {
@@ -338,7 +337,6 @@ const zh: Record<keyof typeof en, string> = {
   "upd.nav": "有新版本 %s",
   "upd.found": "发现新版本 %s。\n%s\n\n是否打开下载页面？",
   "upd.latest": "当前 %s 已是最新版本。",
-  "upd.noServer": "请先在首选项中填写服务器地址，才能检查更新。",
   "tb.uninstaller": "卸载器",
   "tb.startup": "启动项",
   "tb.refresh": "刷新",
@@ -388,7 +386,7 @@ const zh: Record<keyof typeof en, string> = {
   "prefs.labels": "显示工具栏按钮文字",
   "prefs.compact": "紧凑的应用列表",
   "prefs.mark32": "标记 32 位应用",
-  "prefs.uninstaller": "卸载器",
+  "prefs.uninstaller": "卸载",
   "prefs.showUpdates": "显示软件更新",
   "prefs.updates": "树形软件更新（子项）：",
   "prefs.updatesCollapsed": "初始折叠",
@@ -588,7 +586,7 @@ const zh: Record<keyof typeof en, string> = {
   "cat.packages": "包管理器",
   "col.source": "来源",
   "ev.rule": "规则库",
-  "prefs.rulesServer": "服务器（规则库与更新，留空则关闭）：",
+  "prefs.list": "列表",
 };
 
 export type MsgKey = keyof typeof en;

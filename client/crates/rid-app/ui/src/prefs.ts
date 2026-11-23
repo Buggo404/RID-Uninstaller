@@ -17,8 +17,6 @@ const defaults = {
   quietUninstall: false,
   /** How long removed items stay restorable. */
   quarantine: "30" as "7" | "30" | "90" | "never",
-  /** Address of the leftover rules server. Empty: no program name ever leaves this machine. */
-  rulesServer: "",
   columns: { size: true, date: true, publisher: false, version: false, traced: true },
   showUpdates: true,
   updates: "collapsed" as "collapsed" | "expanded" | "always",

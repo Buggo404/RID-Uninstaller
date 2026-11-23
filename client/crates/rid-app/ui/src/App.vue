@@ -177,10 +177,8 @@ async function openUpdate() {
 
 /** `manual`: the user asked, so every outcome is reported; the check at start stays silent unless there is news. */
 async function checkUpdate(manual: boolean) {
-  const server = prefs.rulesServer.trim();
-  if (!server) return manual && notify(t("upd.noServer"));
   try {
-    update.value = await api.checkUpdate(server);
+    update.value = await api.checkUpdate();
   } catch (e) {
     if (manual) report(e);
     return;
