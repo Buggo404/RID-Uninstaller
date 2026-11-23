@@ -60,6 +60,7 @@ pub fn record(command: &str, follow_msiexec: bool, cancel: &AtomicBool, mut on_e
     let (events_in, events) = mpsc::channel();
     let shared = etw::Shared::new(follow_msiexec, events_in);
     let reader = etw::read(shared.clone())?;
+    wait_until_live(&session, &shared, &events)?;
 
     let mut cmd: Vec<u16> = command.encode_utf16().chain([0]).collect();
     let startup = STARTUPINFOW { cb: size_of::<STARTUPINFOW>() as u32, ..Default::default() };
@@ -119,6 +120,31 @@ pub fn record(command: &str, follow_msiexec: bool, cancel: &AtomicBool, mut on_e
         take(event, &mut setup, &mut recording);
     }
     Ok(recording)
+}
+
+/// Returns once a file this process creates comes back as an event. Windows starts reporting
+/// some time after it was asked to; a setup program started before that would do its first
+/// work unrecorded, and nothing would show that the recording is short.
+fn wait_until_live(session: &etw::Session, shared: &etw::Shared, events: &mpsc::Receiver<Event>) -> io::Result<()> {
+    let me = std::process::id();
+    let name = format!("rid-probe-{me}");
+    let probe = std::env::temp_dir().join(&name);
+    shared.trace(me);
+    let mut live = false;
+    for _ in 0..100 {
+        std::fs::write(&probe, [])?;
+        std::fs::remove_file(&probe)?;
+        session.flush();
+        std::thread::sleep(Duration::from_millis(50));
+        if events.try_iter().any(|e| matches!(e.change, Change::Created { path, .. } if path.ends_with(&name))) {
+            live = true;
+            break;
+        }
+    }
+    shared.forget(me);
+    // What else this process did meanwhile is not part of any installation.
+    events.try_iter().for_each(drop);
+    if live { Ok(()) } else { Err(io::Error::other("Windows is not reporting file changes, so nothing could be recorded")) }
 }
 
 #[cfg(test)]

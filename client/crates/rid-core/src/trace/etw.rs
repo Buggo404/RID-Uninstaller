@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_SUCCESS, WIN32_ERROR};
 use windows::Win32::System::Diagnostics::Etw::{
-    CONTROLTRACE_HANDLE, CloseTrace, ControlTraceW, EVENT_CONTROL_CODE_ENABLE_PROVIDER, EVENT_RECORD, EVENT_TRACE_CONTROL_QUERY,
+    CONTROLTRACE_HANDLE, CloseTrace, ControlTraceW, EVENT_CONTROL_CODE_ENABLE_PROVIDER, EVENT_RECORD, EVENT_TRACE_CONTROL_FLUSH, EVENT_TRACE_CONTROL_QUERY,
     EVENT_TRACE_CONTROL_STOP, EVENT_TRACE_LOGFILEW, EVENT_TRACE_INDEPENDENT_SESSION_MODE, EVENT_TRACE_PROPERTIES, EVENT_TRACE_REAL_TIME_MODE,
     EnableTraceEx2, OpenTraceW, PROCESS_TRACE_MODE_EVENT_RECORD, PROCESS_TRACE_MODE_REAL_TIME, ProcessTrace, StartTraceW, WNODE_FLAG_TRACED_GUID,
 };
@@ -94,6 +94,12 @@ impl Session {
         }
     }
 
+    /// Has Windows hand over now what it would otherwise hold for up to a second.
+    pub fn flush(&self) {
+        // SAFETY: as in `start`.
+        let _ = unsafe { ControlTraceW(self.0, None, properties().as_mut_ptr().cast(), EVENT_TRACE_CONTROL_FLUSH) };
+    }
+
     pub fn stop(&self) {
         // SAFETY: as in `start`. Stopping twice is harmless: the second call just fails.
         let _ = unsafe { ControlTraceW(self.0, None, properties().as_mut_ptr().cast(), EVENT_TRACE_CONTROL_STOP) };
@@ -157,6 +163,12 @@ impl Shared {
     pub fn trace(&self, pid: u32) {
         if let Ok(mut state) = self.state.lock() {
             state.pids.insert(pid);
+        }
+    }
+
+    pub fn forget(&self, pid: u32) {
+        if let Ok(mut state) = self.state.lock() {
+            state.pids.remove(&pid);
         }
     }
 }
