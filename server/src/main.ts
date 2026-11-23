@@ -77,7 +77,9 @@ app.get<{ Params: { key: string } }>("/v1/rules/:key", async (request, reply) =>
 
 /** The release clients are offered, in the shape the client's updater reads; 204 until one is published. */
 app.get("/v1/update", async (_request, reply) => {
-  reply.header("Cache-Control", "public, max-age=300");
+  // Never cached: a release must take effect for everyone at once, and a CDN in front would
+  // otherwise keep offering the previous one for as long as it likes.
+  reply.header("Cache-Control", "no-store");
   return (await setting("release")) ?? reply.code(204).send();
 });
 
