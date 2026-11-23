@@ -120,9 +120,7 @@ server/               规则库、更新、管理后台
 
 [MIT](LICENSE)
 
-## Star 趋势
-
-[![Stargazers over time](https://starchart.cc/Buggo404/RID-Uninstaller.svg?variant=adaptive)](https://starchart.cc/Buggo404/RID-Uninstaller)
+<a href="https://star-history.com/#Buggo404/RID-Uninstaller&Date"><img src="https://api.star-history.com/svg?repos=Buggo404/RID-Uninstaller&type=Date" alt="Star history" width="600" /></a>
 
 ---
 
