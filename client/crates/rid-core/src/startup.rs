@@ -173,7 +173,7 @@ impl Lister {
 }
 
 /// Expands `%SystemRoot%`-style references; Run values are often REG_EXPAND_SZ.
-fn expand_env(s: &str) -> String {
+pub(crate) fn expand_env(s: &str) -> String {
     let mut out = String::new();
     let mut rest = s;
     while let Some(start) = rest.find('%') {

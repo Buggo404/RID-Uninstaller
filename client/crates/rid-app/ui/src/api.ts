@@ -216,10 +216,10 @@ export function iconUrl(source: string): string {
   return convertFileSrc(hex, "icon");
 }
 
-/** A program's icon: the one it names, else that of the main program in its folder, else (for MSI products) Installer's own. */
+/** A program's icon: the one it names, else that of the main program in its folder, else Installer's own (MSI products) or the one Windows gives programs without any. */
 export function appIcon(a: App): string {
-  const sources = [a.icon, a.install_location, a.is_msi ? "MsiExec.exe" : ""].filter(Boolean);
-  return sources.length ? iconUrl(sources.join("|")) : "";
+  const generic = a.is_msi ? "MsiExec.exe" : "%SystemRoot%\\System32\\shell32.dll,2";
+  return iconUrl([a.icon, a.install_location, generic].filter(Boolean).join("|"));
 }
 
 export function formatSize(kb: number | null | undefined): string {

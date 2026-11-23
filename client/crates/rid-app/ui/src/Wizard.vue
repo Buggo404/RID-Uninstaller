@@ -2,7 +2,7 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { computed, onMounted, ref } from "vue";
 import { report as showError } from "./actions";
-import { type App, type Leftover, type Proc, type Report, api, formatSize, iconUrl, targetText } from "./api";
+import { type App, type Leftover, type Proc, type Report, api, appIcon, formatSize, targetText } from "./api";
 import { t } from "./i18n";
 import { prefs } from "./prefs";
 import type { JobMode } from "./store";
@@ -188,8 +188,7 @@ onMounted(() =>
     <template v-if="step === 'confirm'">
       <ul class="app-cards">
         <li v-for="(a, i) in apps" :key="a.id">
-          <img v-if="a.icon" class="app-icon" :src="iconUrl(a.icon)" alt="" />
-          <span v-else class="app-icon placeholder" aria-hidden="true"></span>
+          <img class="app-icon" :src="appIcon(a)" alt="" />
           <span class="app-card-name">{{ a.name }}</span>
           <span v-if="mode === 'uninstall' && prefs.quietUninstall && silent[i] === false" class="chip">{{ t("wiz.needsYou") }}</span>
           <span class="app-card-meta">{{ [a.version, formatSize(a.size_kb)].filter(Boolean).join(" · ") }}</span>

@@ -117,7 +117,7 @@ const categoryName = computed(() => {
   return category.value === "recent" ? t(key, "").replace(/\s*[(（].*$/, "") : t(key);
 });
 
-const hasIcon = (a: App) => appIcon(a) !== "" && !brokenIcons.value.has(a.id);
+const hasIcon = (a: App) => !brokenIcons.value.has(a.id);
 </script>
 
 <template>
