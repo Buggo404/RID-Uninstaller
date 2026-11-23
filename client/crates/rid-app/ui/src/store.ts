@@ -3,7 +3,7 @@ import { computed, reactive, ref } from "vue";
 import { type App, type Category, type Inventory, type StartupItem, type TraceRecord, api } from "./api";
 import { prefs } from "./prefs";
 
-// shortcut: provisional window, replace with the original's value once docs/reverse-notes.md has it.
+// shortcut: a fixed window of days, make it a preference if people ask for another.
 const RECENT_DAYS = 7;
 
 export type View = "uninstaller" | "startup";

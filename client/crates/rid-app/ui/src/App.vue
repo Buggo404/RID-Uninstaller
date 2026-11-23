@@ -98,6 +98,7 @@ const glyphs = {
   sidebar: "M4 5h16v14H4z M9.5 5v14",
   details: "M4 5h16v14H4z M14.5 5v14",
   quarantine: "M4 8h16v11H4z M3 4h18v4H3z M10 12h4",
+  bug: "M9 7a3 3 0 0 1 6 0 M7 10h10v5a5 5 0 0 1-10 0z M12 10v10 M3 13h4 M17 13h4 M4.5 7.5L7 10 M19.5 7.5L17 10 M4.5 20L7.5 17.5 M19.5 20l-3-2.5",
   github:
     "M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z",
 };
@@ -391,9 +392,16 @@ onUnmounted(() => removeEventListener("keydown", onKey));
         <span class="nav-text">{{ t("upd.nav", update.version) }}</span>
         <span class="count"><i class="status-dot running"></i></span>
       </button>
-      <button type="button" class="nav icon-only" title="GitHub" aria-label="GitHub" @click="api.openUrl(api.repoUrl).catch(report)">
-        <svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.github" /></svg>
-      </button>
+      <div class="nav-pair">
+        <button type="button" class="nav" :title="tip('GitHub')" @click="api.openUrl(api.repoUrl).catch(report)">
+          <svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.github" /></svg>
+          <span class="nav-text">GitHub</span>
+        </button>
+        <button type="button" class="nav" :title="tip(t('nav.bug'))" @click="api.openUrl(`${api.repoUrl}/issues`).catch(report)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.bug" /></svg>
+          <span class="nav-text">{{ t("nav.bug") }}</span>
+        </button>
+      </div>
       <button type="button" class="nav" :title="tip(t('tb.prefs'))" @click="showPrefs = true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.prefs" /></svg>
         <span class="nav-text">{{ t("tb.prefs") }}</span>

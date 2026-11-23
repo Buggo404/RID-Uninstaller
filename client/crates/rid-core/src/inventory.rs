@@ -263,7 +263,7 @@ fn is_stale(uninstall_string: &str, install_location: &str) -> bool {
     uninstaller.is_absolute() && !uninstaller.exists() && (install_location.is_empty() || !Path::new(install_location).exists())
 }
 
-// shortcut: standard Add/Remove Programs semantics, replace with the original's rules once docs/reverse-notes.md has them.
+// shortcut: the semantics of Windows' own Add/Remove Programs, refine when real entries show a need.
 fn classify(system_component: bool, parent_key: &str, release_type: &str) -> Category {
     let release = release_type.to_ascii_lowercase();
     if system_component {

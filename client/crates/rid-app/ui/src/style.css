@@ -223,8 +223,45 @@ a {
     color 0.15s var(--ease);
 }
 
-.nav.icon-only {
-  align-self: flex-start;
+/* Two entries side by side; collapsed, the second slides up above the first. Both are placed
+   by transform, so the move is animated and nothing reflows. */
+.nav-pair {
+  position: relative;
+  flex: none;
+  height: 28px;
+  transition: height 0.3s var(--ease);
+}
+
+.nav-pair .nav {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 97px;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    width 0.3s var(--ease),
+    transform 0.3s var(--ease);
+}
+
+.nav-pair .nav + .nav {
+  transform: translateX(98px);
+}
+
+.nav-pair .nav-text {
+  width: auto;
+}
+
+.sidebar.collapsed .nav-pair {
+  height: 57px;
+}
+
+.sidebar.collapsed .nav-pair .nav {
+  width: 31px;
+}
+
+.sidebar.collapsed .nav-pair .nav + .nav {
+  transform: translateY(-29px);
 }
 
 .nav svg.solid {
