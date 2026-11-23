@@ -123,6 +123,10 @@ server/               规则库、更新、管理后台
 
 [MIT](LICENSE)
 
+## Star 趋势
+
+[![Stargazers over time](https://starchart.cc/Buggo404/RID-Uninstaller.svg?variant=adaptive)](https://starchart.cc/Buggo404/RID-Uninstaller)
+
 ---
 
 ## English
