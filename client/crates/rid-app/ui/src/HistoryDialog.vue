@@ -34,17 +34,20 @@ const restore = (b: BatchInfo) =>
     await notify(text);
   });
 
+/** Files a running program has loaded are deleted by Windows at the next restart; the user is told which. */
+const inUse = (files: string[]) => files.length && notify(`\n\n`);
+
 const purge = (b: BatchInfo) =>
   act(async () => {
-    if (await confirmBox(t("hist.confirmDelete", b.label))) {
-      await api.quarantinePurge(b.id);
-    }
+    if (await confirmBox(t("hist.confirmDelete", b.label))) inUse(await api.quarantinePurge(b.id));
   });
 
 const clear = () =>
   act(async () => {
     if (!(await confirmBox(t("hist.confirmClear", batches.value.length)))) return;
-    for (const b of batches.value) await api.quarantinePurge(b.id);
+    const waiting: string[] = [];
+    for (const b of batches.value) waiting.push(...(await api.quarantinePurge(b.id)));
+    inUse(waiting);
   });
 
 onMounted(() => {

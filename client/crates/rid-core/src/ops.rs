@@ -409,18 +409,43 @@ pub fn restore(id: &str) -> io::Result<Vec<String>> {
     Ok(problems)
 }
 
-/// Deletes a batch for good.
-pub fn purge(id: &str) -> io::Result<()> {
-    let manifest = read_manifest(id)?;
-    for payload in payload_dirs(&manifest) {
-        match fs::remove_dir_all(&payload) {
-            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
-            _ => {}
+/// Deletes everything under `path` that lets itself be deleted and returns what is left,
+/// children before the folders that hold them. A file some program has loaded is the usual reason.
+fn delete_what_can_go(path: &Path, left: &mut Vec<PathBuf>) {
+    let is_dir = fs::symlink_metadata(path).is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink());
+    if is_dir {
+        for entry in fs::read_dir(path).into_iter().flatten().flatten() {
+            delete_what_can_go(&entry.path(), left);
         }
+    }
+    let gone = if is_dir { fs::remove_dir(path) } else { fs::remove_file(path).or_else(|_| fs::remove_dir(path)) };
+    if gone.is_err_and(|e| e.kind() != io::ErrorKind::NotFound) {
+        left.push(path.to_path_buf());
+    }
+}
+
+/// Deletes a batch for good. Files a running program still has loaded cannot be deleted now;
+/// Windows deletes those at the next restart, and they are returned.
+pub fn purge(id: &str) -> io::Result<Vec<String>> {
+    let manifest = read_manifest(id)?;
+    let mut left = Vec::new();
+    for payload in payload_dirs(&manifest) {
+        delete_what_can_go(&payload, &mut left);
         // The per-volume quarantine folder itself goes once its last batch is gone.
         let _ = payload.parent().map(fs::remove_dir);
     }
-    fs::remove_dir_all(batches_dir()?.join(id))
+    // The batch's record is only dropped once everything is gone or will be: otherwise
+    // nothing would remember the files that stayed.
+    if let Some(stuck) = left.iter().find(|path| !delete_on_reboot(path)) {
+        return Err(io::Error::other(format!("in use and could not be scheduled for deletion: {}", stuck.display())));
+    }
+    // Asked for after the batch folders, so the per-volume folder goes too if this was its last
+    // batch; Windows leaves a folder that is not empty by then.
+    for quarantine in left.iter().filter_map(|p| payload_dirs(&manifest).into_iter().find(|d| d == p)?.parent().map(Path::to_path_buf)) {
+        delete_on_reboot(&quarantine);
+    }
+    fs::remove_dir_all(batches_dir()?.join(id))?;
+    Ok(left.iter().filter(|p| !p.is_dir()).map(|p| p.to_string_lossy().into_owned()).collect())
 }
 
 /// Drops batches older than `days`. Returns how many were removed.

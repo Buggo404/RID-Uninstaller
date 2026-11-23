@@ -127,3 +127,32 @@ fn registry_keys_and_values_come_back_on_restore() {
     assert_eq!(problems, Vec::<String>::new());
     assert_eq!(values.unwrap(), (Some("héllo".to_string()), Some(42)));
 }
+
+#[test]
+fn purging_a_batch_with_a_file_in_use_leaves_nothing_behind_in_quarantine() {
+    use windows::Win32::Foundation::FreeLibrary;
+    use windows::Win32::System::LibraryLoader::LoadLibraryW;
+    let s = sandbox("purge-in-use");
+    let roots = s.roots();
+    let app = s.dir(r"Apps\Shelly");
+    s.file(r"Apps\Shelly\readme.txt");
+    let loaded = s.file(r"Apps\Shelly\ext\shell.dll");
+    // A library a program has loaded can be moved but not deleted, as with a shell extension in Explorer.
+    fs::copy(system32("version.dll"), &loaded).unwrap();
+    // SAFETY: a copy of a system library with no side effects on load; released below.
+    let held = unsafe { LoadLibraryW(&HSTRING::from(loaded.as_os_str())) }.unwrap();
+
+    let report = remove("Shelly", &[dir(&app)], &roots, &[], &[]).unwrap();
+    let id = report.batch.expect("something was removed");
+    let at_restart = purge(&id);
+    // SAFETY: the handle came from LoadLibraryW above.
+    unsafe { FreeLibrary(held) }.unwrap();
+    let at_restart = at_restart.unwrap();
+
+    assert_eq!(at_restart.len(), 1, "{at_restart:?}");
+    assert!(at_restart[0].ends_with("shell.dll"));
+    assert!(list().is_empty(), "the batch is gone from the list");
+    let stored = std::path::Path::new(&at_restart[0]);
+    assert!(stored.exists(), "the file in use waits for the restart");
+    assert!(!stored.parent().unwrap().parent().unwrap().join("readme.txt").exists(), "everything else is deleted now");
+}

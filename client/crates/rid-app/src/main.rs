@@ -493,9 +493,12 @@ fn remove_leftovers(state: State, label: String, ids: Vec<String>, targets: Vec<
     if permanent
         && report.pending_reboot.is_empty()
         && let Some(batch) = report.batch.take()
-        && ops::purge(&batch).is_err()
     {
-        report.batch = Some(batch);
+        match ops::purge(&batch) {
+            // Files still loaded by a running program go at the next restart.
+            Ok(at_restart) => report.pending_reboot = at_restart,
+            Err(_) => report.batch = Some(batch),
+        }
     }
     Ok(report)
 }
@@ -521,8 +524,9 @@ fn quarantine_restore(id: String) -> CmdResult<Vec<String>> {
     ops::restore(&id).map_err(err)
 }
 
+/// Returns the files that are in use and will be deleted at the next restart.
 #[tauri::command(async)]
-fn quarantine_purge(id: String) -> CmdResult {
+fn quarantine_purge(id: String) -> CmdResult<Vec<String>> {
     ops::purge(&id).map_err(err)
 }
 

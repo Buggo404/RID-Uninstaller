@@ -295,7 +295,7 @@ onMounted(() =>
           </ul>
         </div>
         <div v-if="result.pending_reboot.length" class="notice">
-          <p>{{ t("wiz.pending") }}</p>
+          <p>{{ t(result.batch ? "wiz.pending" : "wiz.pendingDelete") }}</p>
           <ul>
             <li v-for="p in result.pending_reboot" :key="p">{{ p }}</li>
           </ul>

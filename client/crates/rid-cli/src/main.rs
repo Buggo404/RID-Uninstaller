@@ -69,7 +69,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         ["restore", batch] => restore(batch),
-        ["purge", batch] => ops::purge(batch).map_err(|e| e.to_string()),
+        ["purge", batch] => ops::purge(batch).map(|at_restart| at_restart.iter().for_each(|f| println!("in use, deleted at the next restart: {f}"))).map_err(|e| e.to_string()),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
