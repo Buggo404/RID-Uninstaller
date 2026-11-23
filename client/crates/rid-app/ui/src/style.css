@@ -223,6 +223,15 @@ a {
     color 0.15s var(--ease);
 }
 
+.nav.icon-only {
+  align-self: flex-start;
+}
+
+.nav svg.solid {
+  fill: currentColor;
+  stroke: none;
+}
+
 .nav-text {
   flex: none;
   width: 118px;

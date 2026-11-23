@@ -113,7 +113,7 @@ const finish = () =>
   guarded(async () => {
     step.value = "removing";
     const targets = found.value.filter((l) => l.checked).map((l) => l.target);
-    result.value = await api.removeLeftovers(label, scanIds.value, targets);
+    result.value = await api.removeLeftovers(label, scanIds.value, targets, prefs.permanentDelete);
     changed = true;
     step.value = "done";
   });

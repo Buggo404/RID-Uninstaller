@@ -441,9 +441,20 @@ fn remove(label: &str, ids: &[String], apps: &[App], targets: &[Target]) -> CmdR
 }
 
 #[tauri::command(async)]
-fn remove_leftovers(state: State, label: String, ids: Vec<String>, targets: Vec<Target>) -> CmdResult<Report> {
+fn remove_leftovers(state: State, label: String, ids: Vec<String>, targets: Vec<Target>, permanent: bool) -> CmdResult<Report> {
     let apps = known(&state, &ids)?;
-    remove(&label, &ids, &apps, &targets)
+    let mut report = remove(&label, &ids, &apps, &targets)?;
+    // Removal always goes through quarantine, which is where the safety checks and the handling of
+    // files in use live; "permanent" empties the batch straight after. Not when files wait for a
+    // restart: they arrive in quarantine after it, and without their batch nothing would clear them.
+    if permanent && report.pending_reboot.is_empty() {
+        if let Some(batch) = report.batch.take() {
+            if ops::purge(&batch).is_err() {
+                report.batch = Some(batch);
+            }
+        }
+    }
+    Ok(report)
 }
 
 /// Removes only the entries from the installed-programs list, nothing else.

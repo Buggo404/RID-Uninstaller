@@ -41,6 +41,12 @@ const purge = (b: BatchInfo) =>
     }
   });
 
+const clear = () =>
+  act(async () => {
+    if (!(await confirmBox(t("hist.confirmClear", batches.value.length)))) return;
+    for (const b of batches.value) await api.quarantinePurge(b.id);
+  });
+
 onMounted(() => {
   dialog.value?.showModal();
   load();
@@ -50,8 +56,7 @@ onMounted(() => {
 <template>
   <dialog ref="dialog" class="dialog wizard" aria-labelledby="history-title" @close="emit('close', changed)">
     <h2 id="history-title">{{ t("hist.title") }}</h2>
-    <p class="note">{{ t("wiz.undo") }}</p>
-    <p v-if="!batches.length">{{ t("hist.empty") }}</p>
+    <p v-if="!batches.length" class="note">{{ t("hist.empty") }}</p>
     <ul v-else class="batches">
       <li v-for="b in batches" :key="b.id">
         <div>
@@ -63,6 +68,7 @@ onMounted(() => {
       </li>
     </ul>
     <form method="dialog" class="dialog-buttons">
+      <button v-if="batches.length" type="button" class="btn ghost" :disabled="busy" @click="clear">{{ t("hist.clear") }}</button>
       <span class="spacer"></span>
       <button class="btn primary" autofocus>{{ t("btn.close") }}</button>
     </form>

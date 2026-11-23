@@ -96,8 +96,9 @@ onMounted(() => {
             <span>{{ t("prefs.wizard") }}</span>
             <RSelect v-model="prefs.wizard" :options="wizard" />
             <span>{{ t("prefs.quarantine") }}</span>
-            <RSelect v-model="prefs.quarantine" :options="retention" />
+            <RSelect v-model="prefs.quarantine" :options="retention" :disabled="prefs.permanentDelete" />
           </div>
+          <label class="check"><input v-model="prefs.permanentDelete" type="checkbox" /> {{ t("prefs.permanentDelete") }}</label>
         </template>
 
         <span class="spacer"></span>

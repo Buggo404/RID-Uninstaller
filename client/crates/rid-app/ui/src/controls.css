@@ -391,15 +391,23 @@ input:is([type="checkbox"], [type="radio"]):disabled {
   color: var(--text);
   box-shadow: var(--shadow);
   opacity: 0;
-  transform: translateY(10px) scale(0.97);
+  transform: translateY(6px) scale(0.98);
+  /* Closing: short and plain. `display` and `overlay` hold the dialog on screen until it has faded. */
   transition:
-    opacity 0.18s var(--ease),
-    transform 0.42s var(--spring);
+    opacity 0.16s ease-in,
+    transform 0.16s ease-in,
+    display 0.16s allow-discrete,
+    overlay 0.16s allow-discrete;
 }
 
 .dialog[open] {
   opacity: 1;
   transform: none;
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.42s var(--spring),
+    display 0.42s allow-discrete,
+    overlay 0.42s allow-discrete;
 }
 
 @starting-style {
@@ -410,14 +418,25 @@ input:is([type="checkbox"], [type="radio"]):disabled {
 }
 
 .dialog::backdrop {
-  background: rgb(0 0 0 / 45%);
-  backdrop-filter: blur(2px);
-  animation: fade 0.2s var(--ease);
+  background: rgb(0 0 0 / 0%);
+  backdrop-filter: blur(0);
+  transition:
+    background-color 0.16s ease-in,
+    backdrop-filter 0.16s ease-in,
+    display 0.16s allow-discrete,
+    overlay 0.16s allow-discrete;
 }
 
-@keyframes fade {
-  from {
-    opacity: 0;
+.dialog[open]::backdrop {
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(2px);
+  transition-duration: 0.2s;
+}
+
+@starting-style {
+  .dialog[open]::backdrop {
+    background: rgb(0 0 0 / 0%);
+    backdrop-filter: blur(0);
   }
 }
 

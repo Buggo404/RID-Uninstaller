@@ -55,8 +55,9 @@ export const api = {
   scanLeftovers: (ids: string[]) => invoke<Leftover[]>("scan_leftovers", { ids }),
   processes: (ids: string[]) => invoke<Proc[]>("processes", { ids }),
   killProcesses: (ids: string[], pids: number[]) => invoke<string[]>("kill_processes", { ids, pids }),
-  removeLeftovers: (label: string, ids: string[], targets: Target[]) =>
-    invoke<Report>("remove_leftovers", { label, ids, targets }),
+  removeLeftovers: (label: string, ids: string[], targets: Target[], permanent: boolean) =>
+    invoke<Report>("remove_leftovers", { label, ids, targets, permanent }),
+  repoUrl: "https://github.com/Buggo404/RID-Uninstaller",
   removeEntries: (label: string, ids: string[]) => invoke<Report>("remove_entries", { label, ids }),
   quarantineList: () => invoke<BatchInfo[]>("quarantine_list"),
   quarantineRestore: (id: string) => invoke<string[]>("quarantine_restore", { id }),

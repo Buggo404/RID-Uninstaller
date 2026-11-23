@@ -15,6 +15,8 @@ const defaults = {
   mark32: true,
   confirmUninstall: true,
   quietUninstall: false,
+  /** Leftovers are deleted for good instead of waiting in quarantine. */
+  permanentDelete: false,
   /** How long removed items stay restorable. */
   quarantine: "30" as "7" | "30" | "90" | "never",
   columns: { size: true, date: true, publisher: false, version: false, traced: true },
