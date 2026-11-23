@@ -30,7 +30,9 @@ services:
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-}
+      AI_DAILY_LIMIT: ${AI_DAILY_LIMIT:-3000}
     ports:
+      # RID_PORT may carry an address, e.g. 127.0.0.1:18730, to listen only for a reverse proxy on this machine.
       - "${RID_PORT:-8080}:8080"
 
 volumes:

@@ -20,6 +20,7 @@ const USAGE: &str = "usage:
   rid context-menu on|off          add or remove Rid's entries in Explorer's right-click menu
   rid restore <batch>              undo a removal
   rid purge <batch>                delete a removal from quarantine for good
+  rid key <program name>           the key a program's leftover rules are filed under on the server
 
 options:
   --quiet     uninstall: use the installer's silent mode; fails if it has none
@@ -50,6 +51,7 @@ fn main() -> ExitCode {
         ["force-remove", name] => force_remove(name, &opts),
         ["remove-entry", name] => remove_entry(name, &opts),
         ["history"] => history(),
+        ["key", name] => rid_core::names::name_keys(name).pop().map(|key| println!("{key}")).ok_or_else(|| "this name is too generic to file rules under".into()),
         ["trace", command] => trace(command, has("--msi")),
         ["context-menu", switch @ ("on" | "off")] => std::env::current_exe()
             .and_then(|cli| {

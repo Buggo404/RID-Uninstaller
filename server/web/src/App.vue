@@ -80,7 +80,7 @@ const saveAccount = () =>
 
 // Release
 
-const release = reactive({ version: "", url: "", notes: "" });
+const release = reactive({ version: "", url: "", signature: "", notes: "" });
 const publish = () => run(() => call("PUT", "/v1/update", release), "已发布");
 
 // Rules: one per line, "kind path"
@@ -121,7 +121,7 @@ const removeProgram = () =>
 
 const features = [["program", "程序"], ["startup", "启动项"], ["leftover", "残留"]];
 const feature = ref("program");
-const ai = reactive({ protocol: "chat", baseUrl: "", model: "", apiKey: "", hasKey: false, fromEnvironment: false, prompts: {}, defaults: {} });
+const ai = reactive({ protocol: "chat", baseUrl: "", model: "", apiKey: "", hasKey: false, fromEnvironment: false, prompts: {}, defaults: {}, today: 0, dailyLimit: 0 });
 const tried = ref(null);
 
 const loadAi = async () => Object.assign(ai, await call("GET", "/admin/api/ai"), { apiKey: "" });
@@ -240,6 +240,7 @@ onMounted(async () => {
         <input v-model="ai.apiKey" class="input" type="password" autocomplete="off" :placeholder="ai.hasKey ? '密钥已保存，留空则不修改' : 'API 密钥'" />
       </div>
       <p v-if="ai.fromEnvironment" class="note">当前使用的是 .env 里的配置；在这里保存后以这里为准。</p>
+      <p class="note">过去 24 小时向模型提问 {{ ai.today }} 次，上限 {{ ai.dailyLimit }} 次；相同的问题 30 天内直接用已有回答。</p>
 
       <nav class="tabs">
         <button v-for="[id, label] in features" :key="id" type="button" :class="{ active: feature === id }" @click="(feature = id), (tried = null)">{{ label }}</button>
@@ -262,8 +263,9 @@ onMounted(async () => {
 
     <form v-else-if="tab === 'release'" class="pane narrow" @submit.prevent="publish">
       <input v-model.trim="release.version" class="input" placeholder="版本号（如 0.2.0）" pattern="\d+\.\d+\.\d+" required />
-      <input v-model.trim="release.url" class="input" type="url" placeholder="下载页地址（https://）" required />
-      <textarea v-model="release.notes" class="input" placeholder="更新说明"></textarea>
+      <input v-model.trim="release.url" class="input" type="url" placeholder="安装包地址（https://…-setup.exe）" required />
+      <textarea v-model.trim="release.signature" class="input short" spellcheck="false" placeholder="签名：安装包旁 .sig 文件的全部内容" required></textarea>
+      <textarea v-model="release.notes" class="input short" placeholder="更新说明"></textarea>
       <div class="row">
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <p v-else class="ok">{{ done }}</p>

@@ -35,9 +35,14 @@ jobs:
         working-directory: client
         run: cargo test -p rid-core
 
+      # Before the installer, which carries rid.exe.
+      - name: Command line
+        working-directory: client
+        run: cargo build --release -p rid-cli
+
       # The tracing driver is not built here: it needs the Windows Driver Kit and, to be of any
       # use, Microsoft's signature. Once there is a signed RidMonitor.sys, pass it as RID_DRIVER.
-      - name: Program
+      - name: Installer
         working-directory: client/crates/rid-app
         env:
           RID_SERVER: ${{ vars.RID_SERVER }}
@@ -45,17 +50,26 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm tauri build
 
-      - name: Command line
-        working-directory: client
-        run: cargo build --release -p rid-cli
-
       - name: Collect
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
-          Copy-Item client/target/release/rid-app.exe dist/RID-Uninstaller.exe
-          Copy-Item client/target/release/rid.exe dist/rid.exe
+          $setup = Get-ChildItem client/target/release/bundle/nsis/*-setup.exe
+          Copy-Item $setup.FullName ("dist/RID-Uninstaller-" + ($setup.Name -replace '^.*?_(\d+\.\d+\.\d+)_.*$', '$1') + "-setup.exe")
           Get-FileHash dist/* -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content dist/SHA256SUMS.txt
+
+      # What makes the installer acceptable to clients as an update. Skipped where the key is not
+      # available (pull requests from forks). An installer signed afterwards with the code-signing
+      # certificate needs this made again: client/scripts/sign.ps1 does both.
+      - name: Update signature
+        shell: pwsh
+        working-directory: client/crates/rid-app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { 'no updater key here'; exit 0 }
+          pnpm tauri signer sign (Get-ChildItem ../../../dist/*-setup.exe).FullName
 
       - uses: actions/upload-artifact@v4
         with:
@@ -90,8 +104,9 @@ jobs:
       - name: Image
         run: docker build server
 
-  # A tag starting with v produces a draft release. The files in it are not signed yet: sign them
-  # on the machine with the code-signing token (client/scripts/sign.ps1), replace them, then publish.
+  # A tag starting with v produces a draft release. The installer in it is not code-signed yet: sign
+  # it on the machine with the token (client/scripts/sign.ps1 -Stage installer), replace it and its
+  # .sig, then publish and enter the address and the .sig on the server's admin page.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [client, server]

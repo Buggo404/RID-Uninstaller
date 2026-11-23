@@ -10,10 +10,11 @@ use rid_core::ops::{self, BatchInfo, Report};
 use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
-use rid_core::{ai, driver, facts, icons, paths, rules, shell, startup, trace, traced, uninstall, update};
+use rid_core::{ai, driver, facts, icons, paths, rules, shell, startup, trace, traced, uninstall};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
 use tauri::http::{Response, StatusCode};
 
 type CmdResult<T = ()> = Result<T, String>;
@@ -325,10 +326,34 @@ fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// The newer release `server` offers, if any.
-#[tauri::command(async)]
-fn check_update() -> CmdResult<Option<update::Release>> {
-    update::check(rid_core::SERVER, env!("CARGO_PKG_VERSION"))
+#[derive(Serialize)]
+struct Release {
+    version: String,
+    notes: String,
+}
+
+/// The updater for this program's server. Whatever the server says, an installer is only
+/// accepted when its signature matches the key built into the program (tauri.conf.json).
+fn updater(app: &tauri::AppHandle) -> CmdResult<tauri_plugin_updater::Updater> {
+    let endpoint = format!("{}/v1/update", rid_core::SERVER).parse().map_err(err)?;
+    app.updater_builder().endpoints(vec![endpoint]).map_err(err)?.build().map_err(err)
+}
+
+/// The newer release the server offers, if any.
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> CmdResult<Option<Release>> {
+    let found = updater(&app)?.check().await.map_err(err)?;
+    Ok(found.map(|update| Release { notes: update.body.clone().unwrap_or_default(), version: update.version }))
+}
+
+/// Downloads the newer release, checks its signature and runs its installer, which closes
+/// this program, replaces it and starts it again.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> CmdResult {
+    match updater(&app)?.check().await.map_err(err)? {
+        Some(update) => update.download_and_install(|_, _| {}, || {}).await.map_err(err),
+        None => Ok(()),
+    }
 }
 
 #[tauri::command]
@@ -672,6 +697,7 @@ fn main() {
         }));
     }
     builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -709,6 +735,7 @@ fn main() {
             clipboard_text,
             ai_ask,
             check_update,
+            install_update,
             system_tool,
             load_prefs,
             save_prefs,

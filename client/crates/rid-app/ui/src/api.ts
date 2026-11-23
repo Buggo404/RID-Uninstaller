@@ -43,7 +43,9 @@ export const api = {
   appVersion: () => invoke<string>("app_version"),
   clipboardText: () => invoke<string>("clipboard_text"),
   aiAsk: (question: Question, lang: string) => invoke<Answer>("ai_ask", { question, lang }),
-  checkUpdate: () => invoke<{ version: string; url: string; notes: string } | null>("check_update"),
+  checkUpdate: () => invoke<{ version: string; notes: string } | null>("check_update"),
+  /** Does not come back when it works: the installer closes this window and starts the new version. */
+  installUpdate: () => invoke<void>("install_update"),
   openRegistry: (keyPath: string) => invoke<void>("open_registry", { keyPath }),
   systemTool: (name: string) => invoke<void>("system_tool", { name }),
   loadPrefs: () => invoke<Record<string, unknown> | null>("load_prefs"),

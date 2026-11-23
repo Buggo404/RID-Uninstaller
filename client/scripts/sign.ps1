@@ -8,12 +8,17 @@
 # built, so the flow is  build.ps1 (once, to produce the binaries)  ->  sign.ps1 -Stage binaries
 # ->  pnpm tauri build (repackages the signed files)  ->  sign.ps1 -Stage installer.
 #
+# The installer stage also writes <installer>.sig with the updater key. Clients only accept an
+# update whose .sig matches the installer byte for byte, so it is made after the code signature;
+# its contents go into the release on the server's admin page.
+#
 # This does NOT make the driver loadable on ordinary machines: kernel drivers must be signed
 # by Microsoft through the Hardware Dev Center. See scripts\driver-package.ps1.
 param(
     [Parameter(Mandatory)][string]$Thumbprint,
     [ValidateSet('binaries', 'installer')][string]$Stage = 'binaries',
-    [string]$TimestampUrl = 'http://timestamp.globalsign.com/tsa/r6advanced1'
+    [string]$TimestampUrl = 'http://timestamp.globalsign.com/tsa/r6advanced1',
+    [string]$UpdaterKey = "$HOME\.tauri\rid-updater.key"
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -33,5 +38,16 @@ foreach ($file in $files) {
     if ($LASTEXITCODE -ne 0) { throw "signing failed: $file" }
     & $signtool.FullName verify /pa $file
     if ($LASTEXITCODE -ne 0) { throw "signature does not verify: $file" }
+}
+if ($Stage -eq 'installer') {
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ''
+    Push-Location "$root\crates\rid-app"
+    try {
+        foreach ($file in $files) {
+            pnpm tauri signer sign -f $UpdaterKey $file | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "updater signature failed: $file" }
+            "update signature: $file.sig"
+        }
+    } finally { Pop-Location }
 }
 "signed $($files.Count) file(s)"

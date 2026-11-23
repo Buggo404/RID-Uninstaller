@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import rateLimit from "@fastify/rate-limit";
@@ -6,7 +6,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { ask, config, factsText, invalidRelease, invalidSettings, isFeature } from "./ai.ts";
 import { DEFAULT_PROMPTS, SAMPLES } from "./prompts.ts";
 import { type Admin, captchaPasses, changeCredentials, closeSession, cookieOf, ensureAdmin, invalidCredentials, newCaptcha, openSession, sessionAdmin, signIn } from "./auth.ts";
-import { find, migrate, pool, programs, remove, replace, setSetting, setting } from "./db.ts";
+import { answersToday, cachedAnswer, find, migrate, pool, programs, remove, replace, saveAnswer, setSetting, setting } from "./db.ts";
 import { invalid, isKey } from "./rules.ts";
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
@@ -14,6 +14,8 @@ if (ADMIN_TOKEN.length < 24) throw new Error("ADMIN_TOKEN must be set to at leas
 /** The AI settings as they are now; read per request so that a change in the web interface applies at once. */
 const aiConfig = async () => config(await setting("ai"));
 const COOKIE = "rid_admin";
+/** Questions sent on to the model per 24 hours, over all clients: a ceiling on what abuse can cost. */
+const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 3000;
 
 // trustProxy: rate limits count the real client address when running behind a reverse proxy.
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 256 * 1024 });
@@ -23,6 +25,8 @@ app.addHook("onRequest", async (request, reply) => {
   reply.header("X-Content-Type-Options", "nosniff");
   reply.header("X-Frame-Options", "DENY");
   reply.header("Referrer-Policy", "no-referrer");
+  // Nothing is kept by a CDN or proxy unless its route says so: one visitor's answer must never reach another.
+  reply.header("Cache-Control", "no-store");
   // A page on another site must not be able to act with the administrator's session.
   const origin = request.headers.origin;
   if (origin && request.method !== "GET" && (!URL.canParse(origin) || new URL(origin).host !== request.headers.host)) {
@@ -71,10 +75,10 @@ app.get<{ Params: { key: string } }>("/v1/rules/:key", async (request, reply) =>
   return found;
 });
 
-/** The release clients are told about; 404 until one is published. */
+/** The release clients are offered, in the shape the client's updater reads; 204 until one is published. */
 app.get("/v1/update", async (_request, reply) => {
-  reply.header("Cache-Control", "public, max-age=600");
-  return (await setting("release")) ?? reply.code(404).send({ error: "no release published" });
+  reply.header("Cache-Control", "public, max-age=300");
+  return (await setting("release")) ?? reply.code(204).send();
 });
 
 // The model costs far more per call than a database lookup, hence the tighter limit.
@@ -87,8 +91,16 @@ app.post<{ Body: { feature?: unknown; lang?: unknown; facts?: unknown } }>(
     if (!isFeature(feature) || !text) return reply.code(400).send({ error: "not a question this server answers" });
     const { upstream, prompts } = await aiConfig();
     if (!upstream) return reply.code(503).send({ error: "no model is configured on this server" });
+    const language = lang === "zh" ? "简体中文" : "English";
+    // The same question about the same program is answered once: most people ask about the same programs.
+    const key = createHash("sha256").update(JSON.stringify([feature, language, upstream.model, prompts[feature], text])).digest("hex");
+    const known = await cachedAnswer(key);
+    if (known) return known;
+    if ((await answersToday()) >= DAILY_LIMIT) return reply.code(429).send({ error: "the daily limit is reached" });
     try {
-      return await ask(upstream, prompts[feature], lang === "zh" ? "简体中文" : "English", text);
+      const answer = await ask(upstream, prompts[feature], language, text);
+      await saveAnswer(key, answer);
+      return answer;
     } catch (e) {
       // The upstream's own words stay in the log; they may quote the key or internal addresses.
       request.log.error(e, "model request failed");
@@ -120,8 +132,8 @@ app.put<{ Body: { version?: unknown; url?: unknown; notes?: unknown } }>("/v1/up
   if (!(await mayManage(request))) return refuse(reply);
   const problem = invalidRelease(request.body);
   if (problem) return reply.code(400).send({ error: problem });
-  const { version, url, notes = "" } = request.body;
-  await setSetting("release", { version, url, notes });
+  const { version, url, signature, notes = "" } = request.body as Record<string, string>;
+  await setSetting("release", { version, url, signature: signature.trim(), notes });
   return { version };
 });
 
@@ -129,10 +141,6 @@ app.put<{ Body: { version?: unknown; url?: unknown; notes?: unknown } }>("/v1/up
 
 const strict = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
 const describe = (admin: Admin) => ({ username: admin.username, mustChange: admin.must_change });
-
-app.addHook("onSend", async (request, reply) => {
-  if (request.url.startsWith("/admin/api/")) reply.header("Cache-Control", "no-store");
-});
 
 app.get("/admin/api/captcha", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async () => newCaptcha());
 
@@ -176,7 +184,7 @@ app.get("/admin/api/ai", async (request, reply) => {
   if (!(await mayManage(request))) return refuse(reply);
   const saved = ((await setting("ai")) ?? {}) as Record<string, any>;
   const { upstream, prompts } = config(saved);
-  return { protocol: upstream?.protocol ?? "chat", baseUrl: upstream?.baseUrl ?? "", model: upstream?.model ?? "", hasKey: !!upstream?.apiKey, fromEnvironment: !!upstream && !saved.baseUrl, prompts, defaults: DEFAULT_PROMPTS };
+  return { protocol: upstream?.protocol ?? "chat", baseUrl: upstream?.baseUrl ?? "", model: upstream?.model ?? "", hasKey: !!upstream?.apiKey, fromEnvironment: !!upstream && !saved.baseUrl, prompts, defaults: DEFAULT_PROMPTS, today: await answersToday(), dailyLimit: DAILY_LIMIT };
 });
 
 app.put<{ Body: Record<string, any> }>("/admin/api/ai", async (request, reply) => {

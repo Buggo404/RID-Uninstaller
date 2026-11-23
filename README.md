@@ -51,7 +51,7 @@ RID 的做法是**每一项残留都要说得出理由，每一次删除都能�
 
 ## 当前状态
 
-项目处于早期阶段（0.1.0），还没有正式发布版本。每次提交都会由 [GitHub Actions](https://github.com/Buggo404/RID-Uninstaller/actions) 自动编译，产物是单个 exe（尚未签名），可以在对应的运行记录里下载。
+项目处于早期阶段，还没有正式发布版本。每次提交都会由 [GitHub Actions](https://github.com/Buggo404/RID-Uninstaller/actions) 自动编译出安装包（尚未做代码签名），可以在对应的运行记录里下载。安装后程序会自己检查并安装新版本：更新包必须带有与程序内置公钥匹配的签名才会被接受。
 
 | 部分 | 状态 |
 | --- | --- |
@@ -73,10 +73,10 @@ cd client
 .\scripts\build.ps1
 ```
 
-脚本会依次运行测试、构建命令行和程序本体，产物是**单个文件** `client\target\release\rid-app.exe`，不需要安装。
+脚本会依次运行测试、构建命令行和程序本体，产物是安装包 `client\target\release\bundle\nsis\Rid Uninstaller_<版本>_x64-setup.exe`。
 
-- 服务器地址在编译时由环境变量 `RID_SERVER` 指定，不设置时指向本机的测试服务。
-- 加上 `-Driver <已由微软签名的 RidMonitor.sys>` 会把驱动一并打进这个文件。
+- 程序默认连接 `https://rid.bitheart.top`；编译时设置环境变量 `RID_SERVER` 可以指向别的服务器（例如本机的测试服务）。
+- 加上 `-Driver <已由微软签名的 RidMonitor.sys>` 会把驱动一并打进程序。
 - 加上 `-BuildDriver` 会同时编译驱动。
 
 ### 隐私
@@ -102,6 +102,8 @@ docker compose up -d --build
 ```
 
 管理后台在 `/admin`。初始管理员密码只在首次启动的日志里出现一次，登录后必须修改。
+
+常见程序的残留规则在 `server/seed/rules.txt`，用 `node scripts/seed.mjs` 导入；某个程序对应的键用 `rid key "<程序名称>"` 得到。
 
 ## 目录
 

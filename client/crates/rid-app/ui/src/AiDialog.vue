@@ -66,7 +66,7 @@ onMounted(() => {
     <form method="dialog" class="dialog-buttons">
       <span v-if="answer && !busy" class="note">{{ t("ai.note") }}</span>
       <span class="spacer"></span>
-      <button v-if="!busy" type="button" class="btn" @click="load(true)">{{ t("ai.again") }}</button>
+      <button v-if="error" type="button" class="btn" @click="load(true)">{{ t("ai.again") }}</button>
       <button class="btn primary" autofocus>{{ t("btn.close") }}</button>
     </form>
   </dialog>

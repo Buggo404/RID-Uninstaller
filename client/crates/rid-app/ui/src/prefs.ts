@@ -15,6 +15,9 @@ const defaults = {
   mark32: true,
   confirmUninstall: true,
   quietUninstall: false,
+  checkUpdates: true,
+  /** A newer version found at start is installed without asking. */
+  autoUpdate: false,
   /** Leftovers are deleted for good instead of waiting in quarantine. */
   permanentDelete: false,
   /** How long removed items stay restorable. */

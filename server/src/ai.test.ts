@@ -58,8 +58,9 @@ test("each protocol gets its own address, credentials and answer shape", () => {
 });
 
 test("a release needs a plain version and an https address", () => {
-  assert.equal(invalidRelease({ version: "1.2.3", url: "https://example.com/rid.exe", notes: "fixes" }), null);
-  for (const bad of [null, {}, { version: "1.2", url: "https://a/b" }, { version: "1.2.3", url: "http://a/b" }, { version: "1.2.3", url: "file:///c:/x" }, { version: "1.2.3", url: "https://a/b", notes: 5 }]) {
+  const signature = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkK";
+  assert.equal(invalidRelease({ version: "1.2.3", url: "https://example.com/rid.exe", signature, notes: "fixes" }), null);
+  for (const bad of [null, {}, { version: "1.2", url: "https://a/b", signature }, { version: "1.2.3", url: "http://a/b", signature }, { version: "1.2.3", url: "file:///c:/x", signature }, { version: "1.2.3", url: "https://a/b" }, { version: "1.2.3", url: "https://a/b", signature: "<script>" }, { version: "1.2.3", url: "https://a/b", signature, notes: 5 }]) {
     assert.ok(invalidRelease(bad), JSON.stringify(bad));
   }
 });

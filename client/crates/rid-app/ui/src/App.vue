@@ -175,9 +175,18 @@ const menus = computed<{ label: string; items: MenuItem[] }[]>(() => [
 const version = ref("");
 const update = ref<Awaited<ReturnType<typeof api.checkUpdate>>>(null);
 
+const updating = ref(false);
+
+async function installUpdate() {
+  if (updating.value) return;
+  updating.value = true;
+  await api.installUpdate().catch(report);
+  updating.value = false;
+}
+
 async function openUpdate() {
   const found = update.value;
-  if (found && (await confirmBox(t("upd.found", found.version, found.notes).replace(/\n{3,}/, "\n\n")))) api.openUrl(found.url).catch(report);
+  if (found && (await confirmBox(t("upd.found", found.version, found.notes).replace(/\n{3,}/, "\n\n")))) installUpdate();
 }
 
 /** `manual`: the user asked, so every outcome is reported; the check at start stays silent unless there is news. */
@@ -188,7 +197,7 @@ async function checkUpdate(manual: boolean) {
     if (manual) report(e);
     return;
   }
-  if (!manual) return;
+  if (!manual) return void (update.value && prefs.autoUpdate && installUpdate());
   if (update.value) openUpdate();
   else notify(t("upd.latest", version.value));
 }
@@ -323,7 +332,7 @@ onMounted(() => {
   void win.onResized(sized);
   sized();
   api.appVersion().then((v) => (version.value = v), console.error);
-  checkUpdate(false);
+  if (prefs.checkUpdates) checkUpdate(false);
 });
 onUnmounted(() => removeEventListener("keydown", onKey));
 </script>
@@ -388,9 +397,9 @@ onUnmounted(() => removeEventListener("keydown", onKey));
       </button>
 
       <span class="spacer"></span>
-      <button v-if="update" type="button" class="nav" :title="tip(t('upd.nav', update.version))" @click="openUpdate">
+      <button v-if="update" type="button" class="nav" :disabled="updating" :title="tip(t('upd.nav', update.version))" @click="openUpdate">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.trace" /></svg>
-        <span class="nav-text">{{ t("upd.nav", update.version) }}</span>
+        <span class="nav-text">{{ updating ? t("upd.busy") : t("upd.nav", update.version) }}</span>
         <span class="count"><i class="status-dot running"></i></span>
       </button>
       <div class="nav-pair">

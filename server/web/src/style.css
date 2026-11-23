@@ -293,3 +293,8 @@ textarea.prompt {
   padding-left: 18px;
   color: var(--muted);
 }
+
+textarea.short {
+  flex: none;
+  min-height: 84px;
+}

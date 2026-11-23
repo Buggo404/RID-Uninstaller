@@ -144,6 +144,8 @@ export function invalidRelease(value: any): string | null {
   if (typeof value?.version !== "string" || !/^\d+\.\d+\.\d+$/.test(value.version)) return "version must look like 1.2.3";
   // Clients open this address in a browser, so it must be one that cannot be tampered with on the way.
   if (typeof value.url !== "string" || !/^https:\/\/[^\s]+$/.test(value.url) || value.url.length > 500) return "url must be an https address";
+  // Made with the updater key when the installer is built; clients refuse an installer it does not match.
+  if (typeof value.signature !== "string" || !/^[A-Za-z0-9+/=\s]{40,4000}$/.test(value.signature)) return "signature is required (the contents of the installer's .sig file)";
   if (value.notes !== undefined && (typeof value.notes !== "string" || value.notes.length > 2000)) return "notes must be text of at most 2000 characters";
   return null;
 }

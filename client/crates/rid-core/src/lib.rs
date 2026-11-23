@@ -1,8 +1,8 @@
 /// The server that answers for leftover rules and new versions.
-// shortcut: a release build must set RID_SERVER; without it this is the server of a local test set-up.
+/// RID_SERVER at build time points a build at another one (a local test set-up, say).
 pub const SERVER: &str = match option_env!("RID_SERVER") {
     Some(address) if !address.is_empty() => address,
-    _ => "http://127.0.0.1:8080",
+    _ => "https://rid.bitheart.top",
 };
 
 pub mod ai;
@@ -29,4 +29,3 @@ pub mod traced;
 #[cfg(test)]
 mod testutil;
 pub mod uninstall;
-pub mod update;

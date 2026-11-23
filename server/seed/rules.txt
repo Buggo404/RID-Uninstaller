@@ -1,0 +1,99 @@
+# Leftover rules published to the rules server by scripts/seed.mjs.
+#
+#   [key] Program name        the key is what `rid key "<name as Windows lists it>"` prints
+#   kind path                 kind: dir, file or reg_key; "/" stands for "\"
+#
+# A rule only nominates a place. The client offers it when it exists on that machine and passes
+# the safety checks, and never pre-selects it. These are places whose names differ from the
+# program's, which the scan by name cannot find on its own.
+
+[7zip] 7-Zip
+reg_key HKCU/SOFTWARE/7-Zip
+reg_key HKLM/SOFTWARE/7-Zip
+reg_key HKLM/SOFTWARE/Classes/*/shellex/ContextMenuHandlers/7-Zip
+reg_key HKLM/SOFTWARE/Classes/CLSID/{23170F69-40C1-278A-1000-000100020000}
+reg_key HKLM/SOFTWARE/Classes/Directory/shellex/ContextMenuHandlers/7-Zip
+reg_key HKLM/SOFTWARE/Classes/Directory/shellex/DragDropHandlers/7-Zip
+reg_key HKLM/SOFTWARE/Classes/Drive/shellex/DragDropHandlers/7-Zip
+reg_key HKLM/SOFTWARE/Classes/Folder/shellex/ContextMenuHandlers/7-Zip
+reg_key HKLM/SOFTWARE/Classes/WOW6432Node/CLSID/{23170F69-40C1-278A-1000-000100020000}
+
+[microsoftvisualstudiocode] Visual Studio Code
+dir %APPDATA%/Code
+dir %USERPROFILE%/.vscode
+
+[cursor] Cursor
+dir %APPDATA%/Cursor
+dir %USERPROFILE%/.cursor
+
+[googlechrome] Google Chrome
+dir %LOCALAPPDATA%/Google/Chrome
+
+[mozillafirefox] Mozilla Firefox
+dir %APPDATA%/Mozilla/Firefox
+dir %LOCALAPPDATA%/Mozilla/Firefox
+
+[obsstudio] OBS Studio
+dir %APPDATA%/obs-studio
+
+[vlcmediaplayer] VLC media player
+dir %APPDATA%/vlc
+
+[nodejs] Node.js
+dir %APPDATA%/npm
+dir %LOCALAPPDATA%/npm-cache
+
+[dockerdesktop] Docker Desktop
+dir %APPDATA%/Docker
+dir %LOCALAPPDATA%/Docker
+dir %USERPROFILE%/.docker
+
+[telegramdesktop] Telegram Desktop
+dir %APPDATA%/Telegram Desktop
+
+[wpsoffice] WPS Office
+dir %APPDATA%/kingsoft
+dir %LOCALAPPDATA%/Kingsoft
+
+[腾讯会议] 腾讯会议
+dir %APPDATA%/Tencent/WeMeet
+
+[网易云音乐] 网易云音乐
+dir %LOCALAPPDATA%/NetEase/CloudMusic
+
+[spotify] Spotify
+dir %APPDATA%/Spotify
+dir %LOCALAPPDATA%/Spotify
+
+[discord] Discord
+dir %APPDATA%/discord
+dir %LOCALAPPDATA%/Discord
+
+[githubdesktop] GitHub Desktop
+dir %APPDATA%/GitHub Desktop
+dir %LOCALAPPDATA%/GitHubDesktop
+
+[slack] Slack
+dir %APPDATA%/Slack
+
+[epicgameslauncher] Epic Games Launcher
+dir %LOCALAPPDATA%/EpicGamesLauncher
+
+[qbittorrent] qBittorrent
+dir %APPDATA%/qBittorrent
+dir %LOCALAPPDATA%/qBittorrent
+
+[zoom] Zoom
+dir %APPDATA%/Zoom
+
+[zoomworkplace] Zoom Workplace
+dir %APPDATA%/Zoom
+
+[obsidian] Obsidian
+dir %APPDATA%/obsidian
+
+[notion] Notion
+dir %APPDATA%/Notion
+
+[typora] Typora
+dir %APPDATA%/Typora

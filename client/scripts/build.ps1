@@ -1,13 +1,13 @@
-# Builds the program: one file, target\release\rid-app.exe, plus the command-line tool rid.exe.
+# Builds the installer:  target\release\bundle\nsis\Rid Uninstaller_<version>_x64-setup.exe
 #
-#   scripts\build.ps1                 the program without the tracing driver inside
-#   scripts\build.ps1 -Driver <file>  with the Microsoft-signed RidMonitor.sys inside
+#   scripts\build.ps1                 without the tracing driver inside
+#   scripts\build.ps1 -Driver <file>  with the Microsoft-signed RidMonitor.sys inside the program
 #   scripts\build.ps1 -BuildDriver    also compiles the driver (needs the Windows Driver Kit and LLVM)
 #
-# Needs: Rust (MSVC toolchain), Node + pnpm. Set RID_SERVER to the address of the server a
-# release should talk to. The binaries come out UNSIGNED; run scripts\sign.ps1 afterwards on
-# the machine that has the code-signing token. The driver is signed by Microsoft, not by us
-# (see scripts\driver-package.ps1).
+# Needs: Rust (MSVC toolchain), Node + pnpm. The files come out UNSIGNED; scripts\sign.ps1 signs
+# them on the machine that has the code-signing token and writes the installer's .sig, which is
+# what a release needs for clients to accept it as an update. The driver is signed by Microsoft,
+# not by us (see scripts\driver-package.ps1).
 param([string]$Driver, [switch]$BuildDriver)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -24,13 +24,13 @@ try {
     if ($BuildDriver) {
         Step 'driver' { Push-Location driver\rid-monitor; try { cargo build --release } finally { Pop-Location } }
     }
+    # Before the program: the installer carries rid.exe.
     Step 'command line' { cargo build --release -p rid-cli }
     if ($Driver) { $env:RID_DRIVER = (Resolve-Path $Driver).Path }
     Push-Location crates\rid-app
     try {
         Step 'front-end packages' { pnpm install --frozen-lockfile }
-        Step 'application' { pnpm tauri build }
+        Step 'application and installer' { pnpm tauri build }
     } finally { Pop-Location; $env:RID_DRIVER = $null }
-    "program:      $root\target\release\rid-app.exe"
-    "command line: $root\target\release\rid.exe"
+    Get-ChildItem target\release\bundle\nsis\*.exe | ForEach-Object { "installer: $($_.FullName)" }
 } finally { Pop-Location }

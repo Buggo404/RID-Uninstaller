@@ -23,6 +23,11 @@ export async function migrate(): Promise<void> {
       key   text PRIMARY KEY,
       value jsonb NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ai_answers (
+      key        text PRIMARY KEY,
+      answer     jsonb NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS admins (
       id            serial PRIMARY KEY,
       username      text NOT NULL UNIQUE,
@@ -37,6 +42,21 @@ export async function migrate(): Promise<void> {
       expires_at timestamptz NOT NULL
     );
   `);
+}
+
+/** A recent answer to exactly this question. "Cannot tell" is asked again: the model may simply have stumbled. */
+export async function cachedAnswer(key: string): Promise<unknown> {
+  const found = await pool.query("SELECT answer FROM ai_answers WHERE key = $1 AND created_at > now() - interval '30 days' AND answer->>'verdict' <> 'unknown'", [key]);
+  return found.rows[0]?.answer ?? null;
+}
+
+export async function saveAnswer(key: string, answer: unknown): Promise<void> {
+  await pool.query("INSERT INTO ai_answers (key, answer) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET answer = $2, created_at = now()", [key, JSON.stringify(answer)]);
+}
+
+/** How many questions went on to the model in the last 24 hours. */
+export async function answersToday(): Promise<number> {
+  return (await pool.query("SELECT count(*)::int AS n FROM ai_answers WHERE created_at > now() - interval '1 day'")).rows[0].n;
 }
 
 export async function programs(): Promise<unknown[]> {

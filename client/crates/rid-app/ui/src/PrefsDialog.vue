@@ -11,7 +11,7 @@ const dialog = ref<HTMLDialogElement>();
 const contextMenu = ref(false);
 
 // A new group of settings is one more entry here and one more block in the template.
-const categories = ["interface", "list", "uninstaller"] as const;
+const categories = ["interface", "list", "uninstaller", "update"] as const;
 const category = ref<(typeof categories)[number]>("interface");
 
 function toggleContextMenu() {
@@ -87,6 +87,11 @@ onMounted(() => {
             <span>{{ t("prefs.updates") }}</span>
             <RSelect v-model="prefs.updates" :options="updates" :disabled="!prefs.showUpdates" />
           </div>
+        </template>
+
+        <template v-else-if="category === 'update'">
+          <label class="check"><input v-model="prefs.checkUpdates" type="checkbox" /> {{ t("prefs.checkUpdates") }}</label>
+          <label class="check"><input v-model="prefs.autoUpdate" type="checkbox" :disabled="!prefs.checkUpdates" /> {{ t("prefs.autoUpdate") }}</label>
         </template>
 
         <template v-else>
