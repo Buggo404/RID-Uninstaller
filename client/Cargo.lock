@@ -3119,7 +3119,7 @@ dependencies = [
 
 [[package]]
 name = "rid-app"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "rid-core",
  "serde",
@@ -3133,7 +3133,7 @@ dependencies = [
 
 [[package]]
 name = "rid-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "rid-core",
  "serde",
@@ -3142,7 +3142,7 @@ dependencies = [
 
 [[package]]
 name = "rid-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "png",
  "serde",
