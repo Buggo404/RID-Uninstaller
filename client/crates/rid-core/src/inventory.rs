@@ -10,6 +10,7 @@ use winreg::{HKEY, RegKey};
 use crate::safety::{self, Roots};
 use crate::{cmdline, msi};
 use std::path::Path;
+use std::sync::{Arc, Mutex, OnceLock};
 
 const UNINSTALL: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
 const UNINSTALL_WOW: &str = r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -75,8 +76,18 @@ pub struct Inventory {
     pub warnings: Vec<String>,
 }
 
-pub fn list() -> Inventory {
-    let mut inv = Inventory::default();
+/// Runs `work`, reporting how long it took when RID_TIMING is set (for performance work).
+fn timed<T>(what: &str, work: impl FnOnce() -> T) -> T {
+    let started = std::time::Instant::now();
+    let result = work();
+    if std::env::var_os("RID_TIMING").is_some() {
+        eprintln!("{what}: {} ms", started.elapsed().as_millis());
+    }
+    result
+}
+
+fn registry_apps() -> (Vec<App>, Vec<String>) {
+    let (mut apps, mut warnings) = (Vec::new(), Vec::new());
     let roots: [(HKEY, &str, u32, &str, bool); 4] = [
         (HKEY_LOCAL_MACHINE, "HKLM", KEY_WOW64_64KEY, UNINSTALL, false),
         (HKEY_LOCAL_MACHINE, "HKLM", KEY_WOW64_32KEY, UNINSTALL, true),
@@ -88,29 +99,79 @@ pub fn list() -> Inventory {
         let Ok(root) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ | view) else { continue };
         for key_name in root.enum_keys().flatten() {
             match root.open_subkey_with_flags(&key_name, KEY_READ | view) {
-                Ok(key) => inv.apps.extend(registry_app(&key, hive_name, &key_name, is_32bit)),
-                Err(e) => inv.warnings.push(format!("{hive_name}\\{path}\\{key_name}: {e}")),
+                Ok(key) => apps.extend(registry_app(&key, hive_name, &key_name, is_32bit)),
+                Err(e) => warnings.push(format!("{hive_name}\\{path}\\{key_name}: {e}")),
             }
         }
     }
-    match appx_apps() {
-        Ok(apps) => inv.apps.extend(apps),
-        Err(e) => inv.warnings.push(format!("AppX: {e}")),
-    }
-    fill_msi_locations(&mut inv.apps);
-    let extra = crate::sources::list(&inv.apps);
-    inv.apps.extend(extra);
-    inv.apps.sort_by_cached_key(|a| a.name.to_lowercase());
+    (apps, warnings)
+}
+
+type ComponentFiles = std::collections::HashMap<String, Vec<String>>;
+
+/// The Windows Installer component table, read once and shared. Reading it is by far the
+/// slowest part of taking inventory and only removal needs it, so the list does not wait for it.
+static COMPONENTS: Mutex<Option<Arc<OnceLock<ComponentFiles>>>> = Mutex::new(None);
+
+fn components() -> Arc<OnceLock<ComponentFiles>> {
+    COMPONENTS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Arc::default).clone()
+}
+
+/// Starts reading the component table again in the background (at start, and after anything
+/// was installed or removed).
+pub fn warm_up() {
+    let fresh: Arc<OnceLock<ComponentFiles>> = Arc::default();
+    *COMPONENTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(fresh.clone());
+    std::thread::spawn(move || {
+        fresh.get_or_init(|| timed("msi components", msi::component_files));
+    });
+}
+
+/// [`list`] plus the install locations Windows Installer knows but the list entries lack.
+/// Waits for the component table; this is what scanning and removal work from.
+pub fn list_full() -> Inventory {
+    let mut inv = list();
+    complete(&mut inv.apps);
     inv
 }
 
+/// Fills in the install locations that [`list`] leaves out. Waits for the component table.
+pub fn complete(apps: &mut [App]) {
+    if apps.iter().any(|a| a.is_msi && a.install_location.is_empty()) {
+        fill_msi_locations(apps, components().get_or_init(msi::component_files));
+    }
+}
+
+/// The installed programs, as fast as they can be read.
+pub fn list() -> Inventory {
+    // The sources do not depend on each other, so they are read side by side.
+    let ((mut apps, mut warnings), appx, extra) = std::thread::scope(|s| {
+        let appx = s.spawn(|| timed("appx", appx_apps));
+        let extra = s.spawn(|| timed("steam/scoop/chocolatey", crate::sources::list));
+        let registry = timed("registry", registry_apps);
+        (registry, appx.join(), extra.join())
+    });
+    match appx {
+        Ok(Ok(found)) => apps.extend(found),
+        Ok(Err(e)) => warnings.push(format!("AppX: {e}")),
+        Err(_) => warnings.push("AppX: the reader stopped unexpectedly".into()),
+    }
+    // Steam registers most games in the Windows list too; those are not listed twice.
+    let extra: Vec<App> = extra
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| match e.id.strip_prefix("STEAM:") {
+            Some(appid) => !apps.iter().any(|a| a.id.ends_with(&format!(":Steam App {appid}"))),
+            None => true,
+        })
+        .collect();
+    apps.extend(extra);
+    apps.sort_by_cached_key(|a| a.name.to_lowercase());
+    Inventory { apps, warnings }
+}
 /// Many MSI packages do not register an install location. Windows Installer still knows
 /// every file it installed for the product, and the folder they share is the answer.
-fn fill_msi_locations(apps: &mut [App]) {
-    if !apps.iter().any(|a| a.is_msi && a.install_location.is_empty()) {
-        return;
-    }
-    let files = msi::component_files();
+fn fill_msi_locations(apps: &mut [App], files: &ComponentFiles) {
     let roots = Roots::from_system();
     let shared: Vec<String> = [&roots.windows]
         .into_iter()

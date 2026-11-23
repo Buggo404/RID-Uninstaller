@@ -7,6 +7,9 @@ const defaults = {
   lang: "auto" as "auto" | "en" | "zh",
   theme: "auto" as "auto" | "light" | "dark",
   compact: false,
+  /** Whether the navigation sidebar is expanded, and whether the details panel is shown. */
+  sidebar: true,
+  details: true,
   mark32: true,
   confirmUninstall: true,
   quietUninstall: false,

@@ -25,29 +25,49 @@ pub fn packed_product_code(guid: &str) -> Option<String> {
 }
 
 /// For every installed product (by packed code): the key files of its components.
-/// One pass over the component list, which is shared by all products.
+/// The component list is shared by all products and runs to tens of thousands of keys,
+/// so it is read by several threads at once.
 pub fn component_files() -> HashMap<String, Vec<String>> {
-    let mut out: HashMap<String, Vec<String>> = HashMap::new();
     let open = |path: &str| RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY);
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
     let Ok(users) = open(USER_DATA) else { return out };
     for sid in users.enum_keys().flatten() {
-        let Ok(components) = open(&format!(r"{USER_DATA}\{sid}\Components")) else { continue };
-        for component in components.enum_keys().flatten() {
-            let Ok(key) = components.open_subkey(&component) else { continue };
-            for (product, value) in key.enum_values().flatten() {
-                // Key paths are files (`C:\...`, or `C?\...` for shared ones) or registry
-                // locations (`02:\SOFTWARE\...`); only the files say where the product lives.
-                let path = value.to_string().replacen('?', ":", 1);
-                let b = path.as_bytes();
-                if b.len() > 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\' {
-                    out.entry(product.to_uppercase()).or_default().push(path);
-                }
-            }
+        let path = format!(r"{USER_DATA}\{sid}\Components");
+        let Ok(components) = open(&path) else { continue };
+        let names: Vec<String> = components.enum_keys().flatten().collect();
+        let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(8);
+        let parts: Vec<Vec<(String, String)>> = std::thread::scope(|s| {
+            let handles: Vec<_> = names
+                .chunks(names.len().div_ceil(workers).max(1))
+                .map(|chunk| {
+                    let path = &path;
+                    s.spawn(move || {
+                        let mut found = Vec::new();
+                        let Ok(components) = open(path) else { return found };
+                        for component in chunk {
+                            let Ok(key) = components.open_subkey(component) else { continue };
+                            for (product, value) in key.enum_values().flatten() {
+                                // Key paths are files (`C:\...`, or `C?\...` for shared ones) or registry
+                                // locations (`02:\SOFTWARE\...`); only the files say where the product lives.
+                                let file = value.to_string().replacen('?', ":", 1);
+                                let b = file.as_bytes();
+                                if b.len() > 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\' {
+                                    found.push((product.to_uppercase(), file));
+                                }
+                            }
+                        }
+                        found
+                    })
+                })
+                .collect();
+            handles.into_iter().filter_map(|h| h.join().ok()).collect()
+        });
+        for (product, file) in parts.into_iter().flatten() {
+            out.entry(product).or_default().push(file);
         }
     }
     out
 }
-
 /// The deepest folder that contains every one of `files`.
 pub fn common_dir(files: &[String]) -> Option<PathBuf> {
     let mut dirs = files.iter().filter_map(|f| f.rsplit_once('\\').map(|(dir, _)| dir));

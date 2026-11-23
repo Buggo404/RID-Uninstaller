@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use rid_core::inventory::{self, App, Inventory};
 use rid_core::ops::{self, BatchInfo, Report};
@@ -13,7 +13,7 @@ use rid_core::scan::{self, Leftover, Target};
 use rid_core::{driver, icons, paths, rules, shell, startup, trace, traced, uninstall};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri::http::{Response, StatusCode};
 
 type CmdResult<T = ()> = Result<T, String>;
@@ -30,20 +30,34 @@ struct AppState {
     cancel: AtomicBool,
     /// Result of the last install recording, until the user decides what to do with it.
     pending_trace: Mutex<Vec<Target>>,
+    /// The list read while the window was still starting, for the first `list_apps`.
+    prefetch: Mutex<Option<std::thread::JoinHandle<Inventory>>>,
+    /// The newest size-measuring pass; older ones stop when they see a newer number.
+    sizing: AtomicU64,
 }
 
 type State<'a> = tauri::State<'a, AppState>;
 
 fn known(state: &AppState, ids: &[String]) -> CmdResult<Vec<App>> {
-    let apps = state.apps.lock().map_err(err)?;
-    ids.iter()
-        .map(|id| apps.iter().find(|a| &a.id == id).cloned().ok_or_else(|| format!("unknown program: {id}")))
-        .collect()
+    let found: CmdResult<Vec<App>> = {
+        let apps = state.apps.lock().map_err(err)?;
+        ids.iter()
+            .map(|id| apps.iter().find(|a| &a.id == id).cloned().ok_or_else(|| format!("unknown program: {id}")))
+            .collect()
+    };
+    // The list is shown before Windows Installer's locations are known; work on a program needs them.
+    let mut found = found?;
+    inventory::complete(&mut found);
+    Ok(found)
 }
 
 #[tauri::command(async)]
 fn list_apps(state: State) -> CmdResult<Inventory> {
-    let mut inv = inventory::list();
+    let prefetched = state.prefetch.lock().map_err(err)?.take().and_then(|reader| reader.join().ok());
+    let mut inv = prefetched.unwrap_or_else(|| {
+        inventory::warm_up();
+        inventory::list()
+    });
     for record in traced::list() {
         match inv.apps.iter_mut().find(|a| a.id == record.app_id) {
             Some(app) => app.traced = true,
@@ -57,6 +71,46 @@ fn list_apps(state: State) -> CmdResult<Inventory> {
     inv.apps.sort_by_cached_key(|a| a.name.to_lowercase());
     *state.apps.lock().map_err(err)? = inv.apps.clone();
     Ok(inv)
+}
+
+/// Install locations only Windows Installer's component table knows, as (id, folder). Reading
+/// that table takes seconds, so the window shows the list first and asks for these afterwards.
+#[tauri::command(async)]
+fn msi_locations(state: State) -> CmdResult<Vec<(String, String)>> {
+    let mut apps: Vec<App> =
+        state.apps.lock().map_err(err)?.iter().filter(|a| a.is_msi && a.install_location.is_empty()).cloned().collect();
+    inventory::complete(&mut apps);
+    let found: Vec<(String, String)> =
+        apps.into_iter().filter(|a| !a.install_location.is_empty()).map(|a| (a.id, a.install_location)).collect();
+    let mut shown = state.apps.lock().map_err(err)?;
+    for (id, folder) in &found {
+        if let Some(app) = shown.iter_mut().find(|a| &a.id == id && a.install_location.is_empty()) {
+            app.install_location = folder.clone();
+        }
+    }
+    Ok(found)
+}
+
+/// Measures the folders of `items` (id, folder) on several threads, reporting each as a
+/// `dir-size` event the moment it is known. A call with a higher `pass` stops this one.
+#[tauri::command(async)]
+fn dir_sizes(app: tauri::AppHandle, state: State, pass: u64, items: Vec<(String, String)>) {
+    let newest = &state.sizing;
+    newest.fetch_max(pass, Ordering::Relaxed);
+    let next = AtomicUsize::new(0);
+    let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(8);
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            s.spawn(|| {
+                while let Some((id, folder)) = items.get(next.fetch_add(1, Ordering::Relaxed)) {
+                    if newest.load(Ordering::Relaxed) > pass {
+                        break;
+                    }
+                    let _ = app.emit("dir-size", (id, paths::dir_size_kb(Path::new(folder))));
+                }
+            });
+        }
+    });
 }
 
 #[tauri::command(async)]
@@ -142,7 +196,7 @@ fn trace_revert(state: State) -> CmdResult<Report> {
             _ => None,
         })
         .collect();
-    let others = scan::other_program_dirs(&[], &inventory::list().apps);
+    let others = scan::other_program_dirs(&[], &inventory::list_full().apps);
     // The freshly installed program is in `others`; its own folder is refused, which is why
     // reverting is offered only when the installation registered nothing.
     ops::remove("Reverted installation", &items, &Roots::from_system(), &others, &keys).map_err(err)
@@ -197,11 +251,6 @@ fn context_menu_enabled() -> bool {
 fn set_context_menu(enabled: bool, trace_label: String, uninstall_label: String) -> CmdResult {
     let app = std::env::current_exe().map_err(err)?;
     shell::set_context_menu(enabled, &app, &trace_label, &uninstall_label).map_err(err)
-}
-
-#[tauri::command(async)]
-fn dir_size(path: String) -> u64 {
-    paths::dir_size_kb(Path::new(&path))
 }
 
 #[tauri::command]
@@ -286,7 +335,7 @@ struct Found {
 #[tauri::command(async)]
 fn scan_leftovers(state: State, ids: Vec<String>, rules_server: Option<String>) -> CmdResult<Vec<Found>> {
     let apps = known(&state, &ids)?;
-    let installed = inventory::list().apps;
+    let installed = inventory::list_full().apps;
     let roots = Roots::from_system();
     let removing: Vec<&str> = ids.iter().map(String::as_str).collect();
     let others = scan::other_program_dirs(&removing, &installed);
@@ -314,7 +363,7 @@ fn scan_leftovers(state: State, ids: Vec<String>, rules_server: Option<String>) 
 
 #[tauri::command(async)]
 fn processes(state: State, ids: Vec<String>) -> CmdResult<Vec<Proc>> {
-    let installed = inventory::list().apps;
+    let installed = inventory::list_full().apps;
     let roots = Roots::from_system();
     Ok(known(&state, &ids)?
         .iter()
@@ -325,7 +374,7 @@ fn processes(state: State, ids: Vec<String>) -> CmdResult<Vec<Proc>> {
 
 #[tauri::command(async)]
 fn kill_processes(state: State, ids: Vec<String>, pids: Vec<u32>) -> CmdResult<Vec<String>> {
-    let installed = inventory::list().apps;
+    let installed = inventory::list_full().apps;
     let roots = Roots::from_system();
     let dirs: Vec<_> =
         known(&state, &ids)?.iter().filter_map(|app| scan::program_folder(app, &installed, &roots)).collect();
@@ -352,7 +401,7 @@ fn recorded_keys(ids: &[String]) -> Vec<String> {
 }
 
 fn remove(label: &str, ids: &[String], apps: &[App], targets: &[Target]) -> CmdResult<Report> {
-    let installed = inventory::list().apps;
+    let installed = inventory::list_full().apps;
     let removing: Vec<&str> = ids.iter().map(String::as_str).collect();
     let others = scan::other_program_dirs(&removing, &installed);
     // Keys this program's recording or its rules name get the wider key check; from the cache
@@ -477,15 +526,32 @@ fn main() {
             }
         });
     }
+    inventory::warm_up();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState::default())
+        .manage(AppState { prefetch: Mutex::new(Some(std::thread::spawn(inventory::list))), ..AppState::default() })
+        .setup(|app| {
+            // The window is created hidden and shown here in the theme's own colour, so
+            // nothing white is on screen while the page loads.
+            if let Some(window) = app.get_webview_window("main") {
+                let dark = match load_prefs().get("theme").and_then(Value::as_str) {
+                    Some("dark") => true,
+                    Some("light") => false,
+                    _ => window.theme().is_ok_and(|t| t == tauri::Theme::Dark),
+                };
+                let (r, g, b) = if dark { (0x10, 0x11, 0x13) } else { (0xfc, 0xfc, 0xfd) };
+                let _ = window.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
+                let _ = window.show();
+            }
+            Ok(())
+        })
         .register_asynchronous_uri_scheme_protocol("icon", move |_ctx, request, responder| {
             let _ = icon_jobs.send((request.uri().path().to_string(), responder));
         })
         .invoke_handler(tauri::generate_handler![
             list_apps,
-            dir_size,
+            msi_locations,
+            dir_sizes,
             open_folder,
             open_url,
             open_registry,

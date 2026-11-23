@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { computed, reactive, ref } from "vue";
 import { type App, type Category, type Inventory, type StartupItem, type TraceRecord, api } from "./api";
 import { prefs } from "./prefs";
@@ -19,7 +20,8 @@ export interface Row {
 export const view = ref<View>("uninstaller");
 export const inv = ref<Inventory>({ apps: [], warnings: [] });
 export const loading = ref(true);
-export const sizing = ref(false);
+/** How many size-measuring passes are running. */
+export const sizing = ref(0);
 export const category = ref<ListCategory>("apps");
 export const filter = ref("");
 export const selected = reactive(new Set<string>());
@@ -31,7 +33,17 @@ export const tracedView = ref<TraceRecord | null>(null);
 
 /** Parents whose expand state differs from the default set in preferences. */
 const toggled = reactive(new Set<string>());
-const sizes = reactive(new Map<string, number>());
+
+// Sizes measured in earlier runs are shown at once and corrected as the new pass reports.
+const SIZES_KEY = "rid.sizes";
+function savedSizes(): [string, number][] {
+  try {
+    return Object.entries(JSON.parse(localStorage.getItem(SIZES_KEY) ?? "{}")).filter((e): e is [string, number] => typeof e[1] === "number");
+  } catch {
+    return [];
+  }
+}
+const sizes = reactive(new Map<string, number>(savedSizes()));
 
 export const sizeOf = (a: App): number | null => a.size_kb ?? sizes.get(a.id) ?? null;
 
@@ -98,6 +110,21 @@ export function setOpen(row: Row, open: boolean) {
 
 let generation = 0;
 
+void listen<[string, number]>("dir-size", ({ payload: [id, kb] }) => sizes.set(id, kb));
+
+/** Installers often leave EstimatedSize out; those folders are measured in the background. */
+async function measure(gen: number, apps: App[]) {
+  const items = apps.filter((a) => a.size_kb == null && a.install_location).map((a): [string, string] => [a.id, a.install_location]);
+  if (!items.length) return;
+  sizing.value++;
+  try {
+    await api.dirSizes(gen, items);
+  } finally {
+    sizing.value--;
+    if (gen === generation) localStorage.setItem(SIZES_KEY, JSON.stringify(Object.fromEntries(sizes)));
+  }
+}
+
 export async function refresh() {
   const gen = ++generation;
   loading.value = true;
@@ -108,19 +135,24 @@ export async function refresh() {
   }
   const ids = new Set(inv.value.apps.map((a) => a.id));
   for (const id of [...selected]) if (!ids.has(id)) selected.delete(id);
+  for (const id of [...sizes.keys()]) if (!ids.has(id)) sizes.delete(id);
 
-  // Installers often leave EstimatedSize out; measure those folders in the background.
-  // Not awaited: the list is usable as soon as it is loaded.
-  void (async () => {
-    sizing.value = true;
-    for (const a of inv.value.apps) {
+  // Neither is awaited: the list is usable as soon as it is loaded.
+  measure(gen, inv.value.apps).catch(console.error);
+  api
+    .msiLocations()
+    .then((found) => {
       if (gen !== generation) return;
-      if (a.size_kb == null && a.install_location && !sizes.has(a.id)) {
-        sizes.set(a.id, await api.dirSize(a.install_location).catch(() => 0));
+      const filled: App[] = [];
+      for (const [id, folder] of found) {
+        const app = byId.value.get(id);
+        if (!app) continue;
+        app.install_location = folder;
+        filled.push(app);
       }
-    }
-    sizing.value = false;
-  })();
+      return measure(gen, filled);
+    })
+    .catch(console.error);
 }
 
 export function start(mode: JobMode) {

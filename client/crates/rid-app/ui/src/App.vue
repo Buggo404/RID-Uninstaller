@@ -60,6 +60,8 @@ const glyphs = {
   packages: "M4 8l8-4 8 4-8 4z M4 8v8l8 4 8-4V8 M12 12v8",
   recent: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
   trace: "M12 3v10 M8 9l4 4 4-4 M4 17v3h16v-3",
+  sidebar: "M4 5h16v14H4z M9.5 5v14",
+  details: "M4 5h16v14H4z M14.5 5v14",
 };
 
 const categories: { id: ListCategory; glyph: keyof typeof glyphs }[] = [
@@ -136,7 +138,24 @@ function show(c: ListCategory) {
   category.value = c;
 }
 
-const reload = () => (view.value === "startup" ? refreshStartup() : refresh()).catch(report);
+const refreshing = ref(false);
+async function reload() {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  // The icon makes at least one full turn, so even an instant refresh is seen to have happened.
+  const turn = new Promise((done) => setTimeout(done, 600));
+  try {
+    await (view.value === "startup" ? refreshStartup() : refresh());
+  } catch (e) {
+    report(e);
+  } finally {
+    await turn;
+    refreshing.value = false;
+  }
+}
+/** Labels are hidden while the sidebar is collapsed; they are offered as tooltips instead. */
+const tip = (label: string) => (prefs.sidebar ? undefined : label);
+const recentLabel = computed(() => t("cat.recent", "").replace(/\s*[(（].*$/, ""));
 const startupGroups: StartupGroup[] = ["all", "registry", "folder", "tasks", "store"];
 watch(view, () => (filter.value = ""));
 
@@ -176,6 +195,7 @@ watchEffect(() => {
   const root = document.documentElement;
   root.dataset.theme = prefs.theme === "auto" ? (dark.value ? "dark" : "light") : prefs.theme;
   root.lang = lang.value === "zh" ? "zh-CN" : "en";
+  localStorage.setItem("rid.theme", root.dataset.theme);
 });
 
 function onKey(e: KeyboardEvent) {
@@ -191,6 +211,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "F1") return act(() => about.value?.showModal());
   if (e.ctrlKey && e.key === "Tab") return act(() => (view.value = view.value === "uninstaller" ? "startup" : "uninstaller"));
   if (ctrl && e.key.toLowerCase() === "s") return act(exportHtml);
+  if (ctrl && e.key.toLowerCase() === "b") return act(() => (prefs.sidebar = !prefs.sidebar));
   if (e.key === "Escape") {
     if (openMenu.value) return (openMenu.value = false);
     if (filter.value) return act(() => ((filter.value = ""), uninstaller.value?.focusList()));
@@ -233,19 +254,19 @@ onUnmounted(() => removeEventListener("keydown", onKey));
 
 <template>
   <div class="app" @click="openMenu = false">
-    <nav class="sidebar">
+    <nav class="sidebar" :class="{ collapsed: !prefs.sidebar }">
       <div class="brand" data-tauri-drag-region>
-        <span class="brand-mark" aria-hidden="true">R</span>
-        <span data-tauri-drag-region>Rid Uninstaller</span>
-        <div class="menu-anchor">
-          <button type="button" class="icon-btn" aria-haspopup="menu" :aria-expanded="openMenu" :aria-label="t('nav.menu')" @click.stop="openMenu = !openMenu">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h.01M8 8h.01M13 8h.01" /></svg>
-          </button>
-          <Transition name="pop">
-            <MenuList v-if="openMenu" :items="moreItems" @close="openMenu = false" />
-          </Transition>
-        </div>
+        <!-- The mark opens the menu too: it is all that is left of this row when the sidebar is collapsed. -->
+        <button type="button" class="brand-mark" aria-haspopup="menu" :aria-expanded="openMenu" :aria-label="t('nav.menu')" :title="t('nav.menu')" @click.stop="openMenu = !openMenu">
+          R
+        </button>
+        <span class="brand-name" data-tauri-drag-region>Rid Uninstaller</span>
+        <button type="button" class="icon-btn" tabindex="-1" aria-hidden="true" @click.stop="openMenu = !openMenu">
+          <svg viewBox="0 0 16 16"><path d="M3 8h.01M8 8h.01M13 8h.01" /></svg>
+        </button>
       </div>
+      <!-- Fixed to the window rather than placed inside the sidebar, which clips what leaves it. -->
+      <MenuList v-if="openMenu" class="context app-menu" :items="moreItems" @close="openMenu = false" />
 
       <div class="nav-label">{{ t("nav.programs") }}</div>
       <button
@@ -256,10 +277,11 @@ onUnmounted(() => removeEventListener("keydown", onKey));
         class="nav"
         :class="{ active: view === 'uninstaller' && category === c.id }"
         :aria-current="view === 'uninstaller' && category === c.id ? 'page' : undefined"
+        :title="tip(t(`cat.${c.id}`))"
         @click="show(c.id)"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs[c.glyph]" /></svg>
-        <span>{{ t(`cat.${c.id}`) }}</span>
+        <span class="nav-text">{{ t(`cat.${c.id}`) }}</span>
         <span class="count">{{ counts[c.id] || "" }}</span>
       </button>
       <button
@@ -267,37 +289,48 @@ onUnmounted(() => removeEventListener("keydown", onKey));
         type="button"
         class="nav"
         :class="{ active: view === 'uninstaller' && category === 'recent' }"
+        :title="tip(recentLabel)"
         @click="show('recent')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.recent" /></svg>
-        <span>{{ t("cat.recent", "").replace(/\s*[(（].*$/, "") }}</span>
+        <span class="nav-text">{{ recentLabel }}</span>
         <span class="count">{{ recentCount }}</span>
       </button>
 
       <div class="nav-label">{{ t("nav.tools") }}</div>
-      <button type="button" class="nav" :class="{ active: view === 'startup' }" @click="view = 'startup'">
+      <button type="button" class="nav" :class="{ active: view === 'startup' }" :title="tip(t('tb.startup'))" @click="view = 'startup'">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.startup" /></svg>
-        <span>{{ t("tb.startup") }}</span>
+        <span class="nav-text">{{ t("tb.startup") }}</span>
       </button>
-      <button type="button" class="nav" @click="tracing = {}">
+      <button type="button" class="nav" :title="tip(t('cat.trace'))" @click="tracing = {}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.trace" /></svg>
-        <span>{{ t("cat.trace") }}</span>
+        <span class="nav-text">{{ t("cat.trace") }}</span>
       </button>
-      <button type="button" class="nav" @click="showHistory = true">
+      <button type="button" class="nav" :title="tip(t('hist.title'))" @click="showHistory = true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.recent" /></svg>
-        <span>{{ t("hist.title") }}</span>
+        <span class="nav-text">{{ t("hist.title") }}</span>
       </button>
 
       <span class="spacer"></span>
-      <button type="button" class="nav" @click="showPrefs = true">
+      <button type="button" class="nav" :title="tip(t('tb.prefs'))" @click="showPrefs = true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.prefs" /></svg>
-        <span>{{ t("tb.prefs") }}</span>
+        <span class="nav-text">{{ t("tb.prefs") }}</span>
         <kbd class="count">F9</kbd>
       </button>
     </nav>
 
     <div class="main">
       <header class="header" data-tauri-drag-region>
+        <button
+          type="button"
+          class="icon-btn"
+          :aria-expanded="prefs.sidebar"
+          :aria-label="t(prefs.sidebar ? 'nav.collapse' : 'nav.expand')"
+          :title="`${t(prefs.sidebar ? 'nav.collapse' : 'nav.expand')} (Ctrl+B)`"
+          @click="prefs.sidebar = !prefs.sidebar"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.sidebar" /></svg>
+        </button>
         <h1 data-tauri-drag-region>{{ title }}</h1>
         <div v-if="view === 'startup'" class="seg" role="tablist">
           <button
@@ -327,8 +360,27 @@ onUnmounted(() => removeEventListener("keydown", onKey));
           />
         </div>
         <button v-if="view === 'startup'" type="button" class="btn" @click="startup.adding = true">{{ t("st.add") }}</button>
-        <button type="button" class="icon-btn" :title="`${t('tb.refresh')} (F5)`" :aria-label="t('tb.refresh')" @click="reload">
+        <button
+          type="button"
+          class="icon-btn"
+          :class="{ spinning: refreshing }"
+          :disabled="refreshing"
+          :title="`${t('tb.refresh')} (F5)`"
+          :aria-label="t('tb.refresh')"
+          @click="reload"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.refresh" /></svg>
+        </button>
+        <button
+          v-if="view === 'uninstaller'"
+          type="button"
+          class="icon-btn"
+          :aria-expanded="prefs.details"
+          :aria-label="t(prefs.details ? 'panel.hide' : 'panel.show')"
+          :title="t(prefs.details ? 'panel.hide' : 'panel.show')"
+          @click="prefs.details = !prefs.details"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.details" /></svg>
         </button>
         <div class="window-buttons">
           <button type="button" :aria-label="t('win.minimize')" @click="win.minimize()">

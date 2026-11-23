@@ -15,9 +15,10 @@
         "title": "Rid Uninstaller",
         "width": 1000,
         "height": 660,
-        "minWidth": 760,
+        "minWidth": 620,
         "minHeight": 440,
-        "decorations": false
+        "decorations": false,
+        "visible": false
       }
     ],
     "security": {

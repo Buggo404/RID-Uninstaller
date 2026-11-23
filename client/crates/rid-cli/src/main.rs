@@ -165,7 +165,7 @@ fn print_leftovers(found: &[Leftover], all: bool) {
 }
 
 fn scan_one(name: &str, json: bool, rules_server: Option<&str>) -> Result<(), Failure> {
-    let inv = inventory::list();
+    let inv = inventory::list_full();
     let app = find(&inv.apps, name)?;
     let roots = Roots::from_system();
     let mut found = scan::scan(app, &inv.apps, &roots);
@@ -200,7 +200,7 @@ fn confirmed(question: &str, opts: &Options) -> Result<bool, Failure> {
 
 /// Removes `targets` and reports every item. Fails if any item could not be removed.
 fn remove(app: &App, targets: &[Target]) -> Result<(), Failure> {
-    let installed = inventory::list().apps;
+    let installed = inventory::list_full().apps;
     let others = scan::other_program_dirs(&[&app.id], &installed);
     let report = ops::remove(&app.name, targets, &Roots::from_system(), &others, &[]).map_err(|e| e.to_string())?;
     for entry in &report.log {
@@ -236,7 +236,7 @@ fn clean(app: &App, installed: &[App], opts: &Options) -> Result<(), Failure> {
 }
 
 fn uninstall_one(name: &str, quiet: bool, clean_after: bool, opts: &Options) -> Result<(), Failure> {
-    let inv = inventory::list();
+    let inv = inventory::list_full();
     let app = find(&inv.apps, name)?;
     let command = if quiet {
         uninstall::quiet_command(app).ok_or_else(|| format!("'{}' has no silent uninstall mode; run without --quiet", app.name))?
@@ -252,7 +252,7 @@ fn uninstall_one(name: &str, quiet: bool, clean_after: bool, opts: &Options) -> 
         return Ok(());
     }
     let outcome = uninstall::uninstall(app, quiet, &AtomicBool::new(false)).map_err(|e| e.to_string())?;
-    let installed = inventory::list().apps;
+    let installed = inventory::list_full().apps;
     if installed.iter().any(|a| a.id == app.id) {
         // Its files are still in use by an installed program, so nothing is cleaned.
         return Err(format!("the uninstaller exited with code {} and the program is still installed", outcome.exit_code));
@@ -262,14 +262,14 @@ fn uninstall_one(name: &str, quiet: bool, clean_after: bool, opts: &Options) -> 
 }
 
 fn force_remove(name: &str, opts: &Options) -> Result<(), Failure> {
-    let inv = inventory::list();
+    let inv = inventory::list_full();
     let app = find(&inv.apps, name)?;
     println!("{} ({}) - the program's uninstaller will NOT be run", app.name, app.id);
     clean(app, &inv.apps, opts)
 }
 
 fn remove_entry(name: &str, opts: &Options) -> Result<(), Failure> {
-    let inv = inventory::list();
+    let inv = inventory::list_full();
     let app = find(&inv.apps, name)?;
     if app.reg_path.is_empty() {
         return Err(format!("'{}' has no registry entry", app.name));

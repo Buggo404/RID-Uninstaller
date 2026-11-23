@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rid Uninstaller</title>
+    <!-- Painted before the stylesheet arrives, so the first frame is never white on a dark system. -->
+    <style>
+      html { background: #fcfcfd; }
+      @media (prefers-color-scheme: dark) { html { background: #101113; } }
+    </style>
   </head>
   <body>
     <div id="app"></div>

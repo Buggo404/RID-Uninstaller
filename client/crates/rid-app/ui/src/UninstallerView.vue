@@ -197,7 +197,8 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
       <p v-else-if="!rows.length" class="empty">{{ t("list.empty", categoryName) }}</p>
     </section>
 
-    <aside class="panel" aria-live="polite">
+    <aside class="panel" :class="{ closed: !prefs.details }" :inert="!prefs.details" aria-live="polite">
+     <div class="panel-inner">
       <template v-if="current">
         <div class="panel-head">
           <img v-if="hasIcon(current)" class="app-icon" :src="iconUrl(current.icon)" alt="" />
@@ -252,6 +253,7 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
         </div>
       </template>
       <p v-else class="empty">{{ t("panel.none") }}</p>
+     </div>
     </aside>
 
     <MenuList v-if="context" class="context" :style="{ left: `${context.x}px`, top: `${context.y}px` }" :items="actionItems" @close="context = null" />

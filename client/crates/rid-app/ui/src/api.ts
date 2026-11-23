@@ -35,7 +35,9 @@ export interface Inventory {
 
 export const api = {
   listApps: () => invoke<Inventory>("list_apps"),
-  dirSize: (path: string) => invoke<number>("dir_size", { path }),
+  msiLocations: () => invoke<[id: string, folder: string][]>("msi_locations"),
+  /** Results arrive as `dir-size` events; the promise settles when the whole pass is done. */
+  dirSizes: (pass: number, items: [id: string, folder: string][]) => invoke<void>("dir_sizes", { pass, items }),
   openFolder: (path: string) => invoke<void>("open_folder", { path }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   openRegistry: (keyPath: string) => invoke<void>("open_registry", { keyPath }),

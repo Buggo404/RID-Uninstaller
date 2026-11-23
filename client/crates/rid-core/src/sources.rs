@@ -165,19 +165,16 @@ fn chocolatey() -> Vec<App> {
     apps
 }
 
-/// Everything from the extra sources. `registry` is what the Windows list already has:
-/// Steam registers most games there too, and those are not listed twice.
-pub fn list(registry: &[App]) -> Vec<App> {
-    let mut apps: Vec<App> = steam()
-        .into_iter()
-        .filter(|game| {
-            let key = format!(":Steam App {}", game.id.trim_start_matches("STEAM:"));
-            !registry.iter().any(|a| a.id.ends_with(&key))
-        })
-        .collect();
-    apps.extend(scoop());
-    apps.extend(chocolatey());
-    apps
+/// Everything from the extra sources, each read on its own thread.
+pub fn list() -> Vec<App> {
+    std::thread::scope(|s| {
+        let scoop = s.spawn(scoop);
+        let chocolatey = s.spawn(chocolatey);
+        let mut apps = steam();
+        apps.extend(scoop.join().unwrap_or_default());
+        apps.extend(chocolatey.join().unwrap_or_default());
+        apps
+    })
 }
 
 #[cfg(test)]

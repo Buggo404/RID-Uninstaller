@@ -10,9 +10,11 @@
   --faint: #9b9fa7;
   --hover: rgb(0 0 0 / 4%);
   --active: rgb(0 0 0 / 7%);
-  --accent: #5e6ad2;
-  --accent-hover: #6d78e0;
-  --accent-soft: rgb(94 106 210 / 16%);
+  /* The accent has no hue: near-black on light, near-white on dark, both short of full contrast. */
+  --accent: #2e2f34;
+  --accent-hover: #45464d;
+  --accent-soft: rgb(0 0 0 / 9%);
+  --on-accent: #fff;
   --danger: #d6404d;
   --ok: #2f9e60;
   --warn: #b26a00;
@@ -37,8 +39,10 @@
   --faint: #5d626b;
   --hover: rgb(255 255 255 / 4%);
   --active: rgb(255 255 255 / 8%);
-  --accent-hover: #7682e8;
-  --accent-soft: rgb(94 106 210 / 28%);
+  --accent: #dcdde1;
+  --accent-hover: #f0f1f3;
+  --accent-soft: rgb(255 255 255 / 13%);
+  --on-accent: #17181b;
   --danger: #eb5a65;
   --ok: #4cb782;
   --warn: #e0a23c;
@@ -110,55 +114,87 @@ p {
 /* Shell */
 
 .app {
-  display: grid;
-  grid-template-columns: 212px 1fr;
+  display: flex;
   height: 100%;
 }
 
+/* Collapsing only narrows the sidebar. Everything inside has a fixed width and position,
+   so labels are clipped and faded where they stand instead of reflowing. */
 .sidebar {
   display: flex;
+  flex: none;
   flex-direction: column;
   gap: 1px;
+  width: 212px;
   padding: 10px 8px;
   background: var(--side);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
+  overflow: hidden auto;
+  transition: width 0.3s var(--ease);
+}
+
+.sidebar.collapsed {
+  width: 48px;
 }
 
 .brand {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
-  padding: 2px 4px 8px 8px;
+  padding: 2px 4px 8px 6px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .brand-mark {
   display: grid;
+  flex: none;
   place-content: center;
   width: 20px;
   height: 20px;
+  padding: 0;
+  border: 0;
   border-radius: 6px;
-  background: linear-gradient(135deg, #7b86e6, #5e6ad2);
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: 11px;
   font-weight: 700;
+  transition: transform 0.3s var(--spring);
 }
 
-.menu-anchor {
-  position: relative;
-  margin-left: auto;
+.brand-mark:active {
+  transform: scale(0.9);
+}
+
+.brand-name {
+  flex: none;
+  width: 121px;
+}
+
+.brand .icon-btn {
+  flex: none;
+}
+
+.menu.app-menu {
+  top: 40px;
+  left: 8px;
 }
 
 .nav-label {
+  flex: none;
   padding: 14px 8px 5px;
   color: var(--faint);
   font-size: 11px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .nav {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 9px;
   height: 28px;
@@ -168,9 +204,30 @@ p {
   background: none;
   color: var(--muted);
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
   transition:
     background-color 0.15s var(--ease),
     color 0.15s var(--ease);
+}
+
+.nav-text {
+  flex: none;
+  width: 118px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-text,
+.nav .count,
+.nav-label,
+.brand-name,
+.brand .icon-btn {
+  transition: opacity 0.2s var(--ease);
+}
+
+.sidebar.collapsed :is(.nav-text, .count, .nav-label, .brand-name, .brand .icon-btn) {
+  opacity: 0;
 }
 
 .nav:hover {
@@ -202,7 +259,9 @@ p {
 }
 
 .count {
-  margin-left: auto;
+  flex: none;
+  width: 28px;
+  text-align: right;
   color: var(--faint);
   font: inherit;
   font-size: 11px;
@@ -211,6 +270,7 @@ p {
 
 .main {
   display: grid;
+  flex: 1;
   grid-template-rows: auto 1fr auto;
   min-width: 0;
   min-height: 0;
@@ -221,8 +281,22 @@ p {
   align-items: center;
   gap: 10px;
   height: 46px;
-  padding: 0 12px 0 18px;
+  padding: 0 12px 0 10px;
   border-bottom: 1px solid var(--border);
+}
+
+.header > .icon-btn:first-child {
+  margin-right: -4px;
+}
+
+.icon-btn.spinning svg {
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .header h1 {
@@ -233,7 +307,8 @@ p {
 
 .search {
   position: relative;
-  width: 232px;
+  flex: 0 1 232px;
+  min-width: 120px;
 }
 
 .search svg {
@@ -289,12 +364,12 @@ p {
 /* List */
 
 .body {
-  display: grid;
-  grid-template-columns: 1fr 272px;
+  display: flex;
   min-height: 0;
 }
 
 .list {
+  flex: 1;
   min-width: 0;
   overflow: auto;
   outline: none;
@@ -375,16 +450,17 @@ p {
   background: var(--hover);
 }
 
-.list tbody tr.recent td:first-child {
-  box-shadow: inset 2px 0 var(--accent-soft);
+.list tbody tr.recent .name-cell::after {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--faint);
 }
 
 .list tbody tr[aria-selected="true"] {
   background: var(--active);
-}
-
-.list tbody tr[aria-selected="true"] td:first-child {
-  box-shadow: inset 2px 0 var(--accent);
 }
 
 .name-cell {
@@ -469,10 +545,24 @@ mark {
 
 /* Detail panel */
 
+/* Closing narrows the panel over content of fixed width, so nothing inside rewraps on the way. */
 .panel {
+  flex: none;
+  width: 272px;
+  overflow: hidden;
+  transition: width 0.3s var(--ease);
+}
+
+.panel.closed {
+  width: 0;
+}
+
+.panel-inner {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  width: 272px;
+  height: 100%;
   padding: 18px 16px;
   border-left: 1px solid var(--border);
   overflow-y: auto;
