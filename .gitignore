@@ -2,3 +2,4 @@ target/
 node_modules/
 dist/
 client/crates/rid-app/gen/
+.env

@@ -60,7 +60,7 @@ fn now() -> u64 {
 
 /// Rules decide what is offered for deletion, so they are only taken over an authenticated
 /// connection; plain HTTP is accepted for a server on this machine (development).
-fn allowed_server(server: &str) -> bool {
+pub(crate) fn allowed_server(server: &str) -> bool {
     server.starts_with("https://") || server.starts_with("http://127.0.0.1") || server.starts_with("http://localhost")
 }
 

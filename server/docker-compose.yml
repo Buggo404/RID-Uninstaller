@@ -1,5 +1,6 @@
-# Set RID_DB_PASSWORD and RID_ADMIN_TOKEN (24+ characters) in the environment or in a .env file
-# next to this one, then: docker compose up -d --build
+# Copy .env.example to .env and fill it in, then: docker compose up -d --build
+name: rid
+
 services:
   db:
     image: postgres:17-alpine
@@ -25,6 +26,10 @@ services:
     environment:
       DATABASE_URL: postgres://rid:${RID_DB_PASSWORD}@db:5432/rid
       ADMIN_TOKEN: ${RID_ADMIN_TOKEN:?set RID_ADMIN_TOKEN}
+      AI_PROTOCOL: ${AI_PROTOCOL:-chat}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
     ports:
       - "${RID_PORT:-8080}:8080"
 

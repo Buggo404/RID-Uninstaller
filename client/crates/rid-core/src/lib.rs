@@ -20,3 +20,4 @@ pub mod traced;
 #[cfg(test)]
 mod testutil;
 pub mod uninstall;
+pub mod update;

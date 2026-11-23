@@ -32,7 +32,8 @@ import {
 } from "./store";
 import StartupView from "./StartupView.vue";
 import TraceDialog from "./TraceDialog.vue";
-import { prompt } from "./ui";
+import { confirmBox, notify, prompt } from "./ui";
+import logo from "../../icons/128x128.png";
 import UninstallerView from "./UninstallerView.vue";
 import Wizard from "./Wizard.vue";
 
@@ -123,8 +124,37 @@ const menus = computed<{ label: string; items: MenuItem[] }[]>(() => [
       { label: t("tools.prefs"), key: "F9", run: () => (showPrefs.value = true) },
     ],
   },
-  { label: t("menu.help"), items: [{ label: t("help.about"), key: "F1", run: () => about.value?.showModal() }] },
+  {
+    label: t("menu.help"),
+    items: [
+      { label: t("help.update"), run: () => checkUpdate(true) },
+      { label: t("help.about"), key: "F1", run: () => about.value?.showModal() },
+    ],
+  },
 ]);
+
+const version = ref("");
+const update = ref<Awaited<ReturnType<typeof api.checkUpdate>>>(null);
+
+async function openUpdate() {
+  const found = update.value;
+  if (found && (await confirmBox(t("upd.found", found.version, found.notes).replace(/\n{3,}/, "\n\n")))) api.openUrl(found.url).catch(report);
+}
+
+/** `manual`: the user asked, so every outcome is reported; the check at start stays silent unless there is news. */
+async function checkUpdate(manual: boolean) {
+  const server = prefs.rulesServer.trim();
+  if (!server) return manual && notify(t("upd.noServer"));
+  try {
+    update.value = await api.checkUpdate(server);
+  } catch (e) {
+    if (manual) report(e);
+    return;
+  }
+  if (!manual) return;
+  if (update.value) openUpdate();
+  else notify(t("upd.latest", version.value));
+}
 
 const counts = computed(() => Object.fromEntries(categories.map((c) => [c.id, inv.value.apps.filter((a) => a.category === c.id).length])));
 const moreItems = computed<MenuItem[]>(() => menus.value.map((m) => ({ label: m.label, children: m.items, disabled: !m.items.length })));
@@ -248,6 +278,8 @@ async function handleLaunch() {
 onMounted(() => {
   addEventListener("keydown", onKey);
   refresh().then(handleLaunch).catch(report);
+  api.appVersion().then((v) => (version.value = v), console.error);
+  checkUpdate(false);
 });
 onUnmounted(() => removeEventListener("keydown", onKey));
 </script>
@@ -258,9 +290,9 @@ onUnmounted(() => removeEventListener("keydown", onKey));
       <div class="brand" data-tauri-drag-region>
         <!-- The mark opens the menu too: it is all that is left of this row when the sidebar is collapsed. -->
         <button type="button" class="brand-mark" aria-haspopup="menu" :aria-expanded="openMenu" :aria-label="t('nav.menu')" :title="t('nav.menu')" @click.stop="openMenu = !openMenu">
-          R
+          <img :src="logo" alt="" />
         </button>
-        <span class="brand-name" data-tauri-drag-region>Rid Uninstaller</span>
+        <span class="brand-name" data-tauri-drag-region>RID</span>
         <button type="button" class="icon-btn" tabindex="-1" aria-hidden="true" @click.stop="openMenu = !openMenu">
           <svg viewBox="0 0 16 16"><path d="M3 8h.01M8 8h.01M13 8h.01" /></svg>
         </button>
@@ -312,6 +344,11 @@ onUnmounted(() => removeEventListener("keydown", onKey));
       </button>
 
       <span class="spacer"></span>
+      <button v-if="update" type="button" class="nav" :title="tip(t('upd.nav', update.version))" @click="openUpdate">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.trace" /></svg>
+        <span class="nav-text">{{ t("upd.nav", update.version) }}</span>
+        <span class="count"><i class="status-dot running"></i></span>
+      </button>
       <button type="button" class="nav" :title="tip(t('tb.prefs'))" @click="showPrefs = true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.prefs" /></svg>
         <span class="nav-text">{{ t("tb.prefs") }}</span>
@@ -411,7 +448,7 @@ onUnmounted(() => removeEventListener("keydown", onKey));
     <PrefsDialog v-if="showPrefs" @close="showPrefs = false" />
 
     <dialog ref="about" class="dialog prompt" aria-labelledby="about-title">
-      <h2 id="about-title">Rid Uninstaller 0.1.0</h2>
+      <h2 id="about-title">Rid Uninstaller {{ version }}</h2>
       <p class="note">{{ t("about.text") }}</p>
       <form method="dialog" class="dialog-buttons">
         <span class="spacer"></span>

@@ -19,7 +19,20 @@ export async function migrate(): Promise<void> {
       path        text NOT NULL,
       UNIQUE (program_key, kind, path)
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key   text PRIMARY KEY,
+      value jsonb NOT NULL
+    );
   `);
+}
+
+export async function setting(key: string): Promise<unknown> {
+  const found = await pool.query("SELECT value FROM settings WHERE key = $1", [key]);
+  return found.rows[0]?.value ?? null;
+}
+
+export async function setSetting(key: string, value: unknown): Promise<void> {
+  await pool.query("INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2", [key, JSON.stringify(value)]);
 }
 
 export interface RuleSet {

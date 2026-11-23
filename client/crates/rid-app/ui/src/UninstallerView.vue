@@ -27,6 +27,9 @@ const columns = computed(() =>
   ).filter((c) => c.on),
 );
 
+// The name column takes what the others leave; below this the list scrolls sideways instead.
+const tableMin = computed(() => columns.value.reduce((sum, c) => sum + (parseInt(c.width) || 220), 0));
+
 // Only the rows in view (plus a margin) are in the DOM, so a machine with thousands of
 // programs scrolls like one with fifty and only asks for the icons it shows.
 const HEAD = 33;
@@ -125,7 +128,7 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
 <template>
   <div class="body" @click="context = null">
     <section ref="listEl" class="list" tabindex="0" @keydown="onListKey" @scroll.passive="scrollTop = ($event.target as HTMLElement).scrollTop">
-      <table role="grid" aria-multiselectable="true" :aria-rowcount="rows.length" :style="{ '--row-h': `${rowH}px` }">
+      <table role="grid" aria-multiselectable="true" :aria-rowcount="rows.length" :style="{ '--row-h': `${rowH}px`, minWidth: `${tableMin}px` }">
         <colgroup>
           <col v-for="c in columns" :key="c.key" :style="{ width: c.width }" />
         </colgroup>

@@ -10,7 +10,7 @@ use rid_core::ops::{self, BatchInfo, Report};
 use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
-use rid_core::{driver, icons, paths, rules, shell, startup, trace, traced, uninstall};
+use rid_core::{driver, icons, paths, rules, shell, startup, trace, traced, uninstall, update};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{Emitter, Manager};
@@ -261,6 +261,17 @@ fn open_folder(path: String) -> CmdResult {
 #[tauri::command]
 fn open_url(url: String) -> CmdResult {
     shell::open_url(&url).map_err(err)
+}
+
+#[tauri::command]
+fn app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// The newer release `server` offers, if any.
+#[tauri::command(async)]
+fn check_update(server: String) -> CmdResult<Option<update::Release>> {
+    update::check(&server, env!("CARGO_PKG_VERSION"))
 }
 
 #[tauri::command]
@@ -555,6 +566,8 @@ fn main() {
             open_folder,
             open_url,
             open_registry,
+            app_version,
+            check_update,
             system_tool,
             load_prefs,
             save_prefs,

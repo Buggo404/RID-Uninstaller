@@ -39,6 +39,11 @@ const en = {
   "tools.tasks": "Task Scheduler",
   "tools.prefs": "Preferences...",
   "help.about": "About...",
+  "help.update": "Check for updates...",
+  "upd.nav": "Version %s available",
+  "upd.found": "Version %s is available.\n%s\n\nOpen the download page?",
+  "upd.latest": "Version %s is the latest.",
+  "upd.noServer": "Set the server address in Preferences to check for updates.",
   "tb.uninstaller": "Uninstaller",
   "tb.startup": "Startup",
   "tb.refresh": "Refresh",
@@ -280,7 +285,7 @@ const en = {
   "cat.packages": "Package managers",
   "col.source": "Source",
   "ev.rule": "rules database",
-  "prefs.rulesServer": "Rules server (empty = off):",
+  "prefs.rulesServer": "Server for rules and updates (empty = off):",
 };
 
 const zh: Record<keyof typeof en, string> = {
@@ -321,6 +326,11 @@ const zh: Record<keyof typeof en, string> = {
   "tools.tasks": "任务计划程序",
   "tools.prefs": "首选项...",
   "help.about": "关于...",
+  "help.update": "检查更新...",
+  "upd.nav": "有新版本 %s",
+  "upd.found": "发现新版本 %s。\n%s\n\n是否打开下载页面？",
+  "upd.latest": "当前 %s 已是最新版本。",
+  "upd.noServer": "请先在首选项中填写服务器地址，才能检查更新。",
   "tb.uninstaller": "卸载器",
   "tb.startup": "启动项",
   "tb.refresh": "刷新",
@@ -562,7 +572,7 @@ const zh: Record<keyof typeof en, string> = {
   "cat.packages": "包管理器",
   "col.source": "来源",
   "ev.rule": "规则库",
-  "prefs.rulesServer": "规则库服务器（留空则关闭）：",
+  "prefs.rulesServer": "服务器（规则库与更新，留空则关闭）：",
 };
 
 export type MsgKey = keyof typeof en;
