@@ -120,7 +120,7 @@ server/               规则库、更新、管理后台
 
 [MIT](LICENSE)
 
-<a href="https://star-history.com/#Buggo404/RID-Uninstaller&Date"><img src="https://api.star-history.com/svg?repos=Buggo404/RID-Uninstaller&type=Date" alt="Star history" width="600" /></a>
+<a href="https://star-history.com/#Buggo404/RID-Uninstaller&Date"><img src="https://api.star-history.com/svg?repos=buggo404%2Frid-uninstaller&type=Date" alt="Star history" width="600" /></a>
 
 ---
 
