@@ -734,11 +734,17 @@ mark {
   color: var(--muted);
   text-align: left;
   overflow-wrap: anywhere;
-  transition: color 0.15s;
+  /* Marks what can be clicked apart from the read-only values above it. */
+  text-decoration: underline dashed var(--border-strong);
+  text-underline-offset: 4px;
+  transition:
+    color 0.15s,
+    text-decoration-color 0.15s;
 }
 
 .link:hover {
   color: var(--accent-hover);
+  text-decoration-color: currentColor;
 }
 
 .note {

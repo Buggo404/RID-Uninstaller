@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import type { Question } from "./api";
 import type { MenuItem } from "./MenuList.vue";
 
 export interface Prompt {
@@ -46,3 +47,6 @@ export function showMenu(e: MouseEvent, items: MenuItem[]) {
     host: (e.target as Element).closest("dialog") ?? document.body,
   };
 }
+
+/** The question the AI dialog is open for. */
+export const asking = ref<{ title: string; icon?: string; question: Question } | null>(null);

@@ -68,7 +68,7 @@ onMounted(() => {
       </li>
     </ul>
     <form method="dialog" class="dialog-buttons">
-      <button v-if="batches.length" type="button" class="btn ghost" :disabled="busy" @click="clear">{{ t("hist.clear") }}</button>
+      <button v-if="batches.length" type="button" class="btn" :disabled="busy" @click="clear">{{ t("hist.clear") }}</button>
       <span class="spacer"></span>
       <button class="btn primary" autofocus>{{ t("btn.close") }}</button>
     </form>

@@ -115,6 +115,11 @@ fn set_approved(hive_name: &str, list: &str, name: &str, enabled: bool) -> io::R
 
 /// The `CompanyName` from an executable's version resource.
 fn company(exe: &str) -> String {
+    version_string(exe, "CompanyName")
+}
+
+/// One named string (`CompanyName`, `FileDescription`, ...) from an executable's version resource.
+pub(crate) fn version_string(exe: &str, field: &str) -> String {
     let path = HSTRING::from(exe);
     // SAFETY: the buffer has the size the API asked for; returned pointers point into it and
     // are only read while it is alive.
@@ -136,7 +141,7 @@ fn company(exe: &str) -> String {
             return String::new();
         }
         let lang = *(ptr as *const [u16; 2]);
-        let sub = format!(r"\StringFileInfo\{:04x}{:04x}\CompanyName", lang[0], lang[1]);
+        let sub = format!(r"\StringFileInfo\{:04x}{:04x}\{field}", lang[0], lang[1]);
         if !query(&sub, &mut ptr, &mut len) {
             return String::new();
         }

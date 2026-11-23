@@ -1,9 +1,9 @@
 import { computed } from "vue";
-import { type App, api } from "./api";
+import { type App, api, appIcon } from "./api";
 import { t } from "./i18n";
 import type { MenuItem } from "./MenuList.vue";
 import { current, refresh, selection, start, tracedView, tracing } from "./store";
-import { confirmBox, notify } from "./ui";
+import { asking, confirmBox, notify } from "./ui";
 
 export const canUninstall = (a: App) => a.category === "store" || a.uninstall_string !== "";
 
@@ -20,6 +20,8 @@ export const jump = {
     current.value &&
     api.openUrl(`https://www.google.com/search?q=${encodeURIComponent(current.value.name)}`).catch(report),
 };
+
+export const askAbout = (a: App) => (asking.value = { title: a.name, icon: appIcon(a), question: { feature: "program", id: a.id } });
 
 export const actionItems = computed<MenuItem[]>(() => {
   const sel = selection.value;
@@ -47,6 +49,7 @@ export const actionItems = computed<MenuItem[]>(() => {
       run: () => start("entry"),
     },
     { sep: true },
+    { label: t("act.askAi"), disabled: !one, run: () => one && askAbout(one) },
     {
       label: t("act.traced"),
       disabled: !traced,

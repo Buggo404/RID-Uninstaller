@@ -10,7 +10,7 @@ use rid_core::ops::{self, BatchInfo, Report};
 use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
-use rid_core::{driver, icons, paths, rules, shell, startup, trace, traced, uninstall, update};
+use rid_core::{ai, driver, facts, icons, paths, rules, shell, startup, trace, traced, uninstall, update};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Emitter, Manager};
@@ -123,10 +123,24 @@ fn driver_status() -> driver::Status {
     driver::status()
 }
 
-/// Installs the driver shipped beside the executable.
+/// The Microsoft-signed driver, when the build was given one (RID_DRIVER, see build.rs).
+#[cfg(embedded_driver)]
+const DRIVER: Option<&[u8]> = Some(include_bytes!(env!("RID_DRIVER_FILE")));
+#[cfg(not(embedded_driver))]
+const DRIVER: Option<&[u8]> = None;
+
+/// Installs the driver carried in the program; a build without one looks for the file beside the executable.
 #[tauri::command(async)]
 fn driver_install() -> CmdResult {
-    let image = std::env::current_exe().map_err(err)?.with_file_name("RidMonitor.sys");
+    let image = match DRIVER {
+        Some(bytes) => {
+            // Unpacked where only administrators can write: what gets installed is what was shipped.
+            let file = paths::secure_dir().map_err(err)?.join("RidMonitor.sys");
+            fs::write(&file, bytes).map_err(err)?;
+            file
+        }
+        None => std::env::current_exe().map_err(err)?.with_file_name("RidMonitor.sys"),
+    };
     driver::install(&image).map_err(driver_err)
 }
 
@@ -270,6 +284,35 @@ fn open_folder(path: String) -> CmdResult {
 #[tauri::command]
 fn open_url(url: String) -> CmdResult {
     shell::open_url(&url).map_err(err)
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "feature", rename_all = "snake_case")]
+enum Question {
+    Program { id: String },
+    Startup { title: String, command: String, exe: String, company: String, source: String, status: String },
+    Leftover { app_id: String, target: Target, evidence: String, size_kb: u64, documents: u32 },
+}
+
+/// Asks the server's model. What is sent is collected here, from the program's entry and folder.
+#[tauri::command(async)]
+fn ai_ask(state: State, question: Question, lang: String) -> CmdResult<ai::Answer> {
+    let (feature, facts) = match &question {
+        Question::Program { id } => ("program", facts::program(&known(&state, std::slice::from_ref(id))?[0])),
+        Question::Startup { title, command, exe, company, source, status } => ("startup", facts::startup(title, command, exe, company, source, status)),
+        Question::Leftover { app_id, target, evidence, size_kb, documents } => {
+            let name = known(&state, std::slice::from_ref(app_id))?.remove(0).name;
+            let (item, kind) = match target {
+                Target::Dir { path } => (path.clone(), "dir"),
+                Target::File { path } => (path.clone(), "file"),
+                Target::RegKey { key } => (key.clone(), "registry key"),
+                Target::RegValue { key, name } => (format!("{key} -> {name}"), "registry value"),
+                Target::Service { name } => (name.clone(), "service"),
+            };
+            ("leftover", facts::leftover(&name, &item, kind, evidence, *size_kb, *documents))
+        }
+    };
+    ai::ask(rid_core::SERVER, feature, &lang, facts)
 }
 
 #[tauri::command]
@@ -447,12 +490,12 @@ fn remove_leftovers(state: State, label: String, ids: Vec<String>, targets: Vec<
     // Removal always goes through quarantine, which is where the safety checks and the handling of
     // files in use live; "permanent" empties the batch straight after. Not when files wait for a
     // restart: they arrive in quarantine after it, and without their batch nothing would clear them.
-    if permanent && report.pending_reboot.is_empty() {
-        if let Some(batch) = report.batch.take() {
-            if ops::purge(&batch).is_err() {
-                report.batch = Some(batch);
-            }
-        }
+    if permanent
+        && report.pending_reboot.is_empty()
+        && let Some(batch) = report.batch.take()
+        && ops::purge(&batch).is_err()
+    {
+        report.batch = Some(batch);
     }
     Ok(report)
 }
@@ -610,9 +653,11 @@ fn main() {
         });
     }
     inventory::warm_up();
-    tauri::Builder::default()
-        // Starting Rid again hands the request to the window that is already open.
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+    let mut builder = tauri::Builder::default();
+    // Starting Rid again hands the request to the window that is already open. Debug builds
+    // skip this, so one can run beside the installed copy while developing.
+    if !cfg!(debug_assertions) {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
@@ -620,7 +665,9 @@ fn main() {
             if let Ok(Some(request)) = launch(args.get(1..).unwrap_or_default(), &app.state::<AppState>()) {
                 let _ = app.emit("launch", request);
             }
-        }))
+        }));
+    }
+    builder
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -656,6 +703,7 @@ fn main() {
             open_registry,
             app_version,
             clipboard_text,
+            ai_ask,
             check_update,
             system_tool,
             load_prefs,

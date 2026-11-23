@@ -1,12 +1,43 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { invalidRelease, request, textOf, upstream } from "./ai.ts";
+import { config, factsText, invalidRelease, invalidSettings, parseAnswer, request, textOf } from "./ai.ts";
+import { DEFAULT_PROMPTS } from "./prompts.ts";
 
-test("the upstream is off until an address and a model are set", () => {
-  assert.equal(upstream({}), null);
-  assert.equal(upstream({ AI_BASE_URL: "https://x/v1" }), null);
-  assert.deepEqual(upstream({ AI_BASE_URL: "https://x/v1/", AI_MODEL: "m", AI_API_KEY: "k" }), { protocol: "chat", baseUrl: "https://x/v1", apiKey: "k", model: "m" });
-  assert.throws(() => upstream({ AI_BASE_URL: "https://x/v1", AI_MODEL: "m", AI_PROTOCOL: "soap" }));
+test("the model comes from the saved settings, else the environment, else the AI is off", () => {
+  assert.equal(config(null, {}).upstream, null);
+  assert.equal(config(null, { AI_BASE_URL: "https://x/v1" }).upstream, null);
+  assert.deepEqual(config(null, { AI_BASE_URL: "https://x/v1/", AI_MODEL: "m", AI_API_KEY: "k" }).upstream, { protocol: "chat", baseUrl: "https://x/v1", apiKey: "k", model: "m" });
+  const saved = { protocol: "messages", baseUrl: "https://y/v1", apiKey: "s", model: "n", prompts: { startup: "mine", leftover: "  " } };
+  const both = config(saved, { AI_BASE_URL: "https://x/v1", AI_MODEL: "m" });
+  assert.deepEqual(both.upstream, { protocol: "messages", baseUrl: "https://y/v1", apiKey: "s", model: "n" });
+  assert.equal(both.prompts.startup, "mine");
+  assert.equal(both.prompts.leftover, DEFAULT_PROMPTS.leftover, "a blank prompt falls back to the built-in one");
+  assert.equal(both.prompts.program, DEFAULT_PROMPTS.program);
+  assert.equal(config({ protocol: "soap", baseUrl: "https://y", model: "n" }, {}).upstream, null);
+});
+
+test("settings are checked before they are saved", () => {
+  assert.equal(invalidSettings({ protocol: "chat", baseUrl: "https://x/v1", model: "m", prompts: { program: "p" } }), null);
+  assert.equal(invalidSettings({ protocol: "chat", baseUrl: "", model: "" }), null, "an empty address switches the AI off");
+  for (const bad of [{}, { protocol: "chat", baseUrl: "ftp://x", model: "m" }, { protocol: "chat", baseUrl: "https://x", model: " " }, { protocol: "chat", baseUrl: "https://x", model: "m", prompts: { program: "x".repeat(8001) } }]) {
+    assert.ok(invalidSettings(bad), JSON.stringify(bad).slice(0, 80));
+  }
+});
+
+test("facts become plain lines and anything else is refused", () => {
+  assert.equal(factsText({ name: " 7-Zip ", empty: "", files: ["a.exe", "b.dll"] }), "name: 7-Zip\nfiles:\n- a.exe\n- b.dll");
+  for (const bad of [null, [], {}, "text", { "Bad Key": "x" }, { name: 5 }, { name: "x".repeat(2001) }, { files: [1] }, { files: Array(61).fill("a") }, { only_blank: " " }]) {
+    assert.equal(factsText(bad), null, JSON.stringify(bad).slice(0, 60));
+  }
+});
+
+test("an answer is read out of whatever surrounds it, and never trusted beyond its shape", () => {
+  const wrapped = '```json\n{"summary": "A file archiver.", "verdict": "safe", "confidence": "high", "points": ["Open source", "", 5, "No dependants"]}\n```';
+  assert.deepEqual(parseAnswer(wrapped), { summary: "A file archiver.", verdict: "safe", confidence: "high", points: ["Open source", "No dependants"] });
+  assert.deepEqual(parseAnswer('{"summary": "x", "verdict": "delete everything", "confidence": 1, "points": "none"}'), { summary: "x", verdict: "unknown", confidence: "low", points: [] });
+  assert.deepEqual(parseAnswer("I do not know this program."), { summary: "I do not know this program.", verdict: "unknown", confidence: "low", points: [] });
+  assert.equal(parseAnswer('{"verdict": "safe"}').verdict, "unknown", "a verdict without a summary is not shown as one");
+  assert.equal(parseAnswer('{"summary": "' + "x".repeat(2000) + '"}').summary.length, 800);
 });
 
 test("each protocol gets its own address, credentials and answer shape", () => {

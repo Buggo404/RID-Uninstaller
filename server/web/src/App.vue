@@ -117,11 +117,36 @@ const removeProgram = () =>
     await loadPrograms();
   }, "已删除");
 
+// AI: the model, and one prompt per feature
+
+const features = [["program", "程序"], ["startup", "启动项"], ["leftover", "残留"]];
+const feature = ref("program");
+const ai = reactive({ protocol: "chat", baseUrl: "", model: "", apiKey: "", hasKey: false, fromEnvironment: false, prompts: {}, defaults: {} });
+const tried = ref(null);
+
+const loadAi = async () => Object.assign(ai, await call("GET", "/admin/api/ai"), { apiKey: "" });
+
+const saveAi = () =>
+  run(async () => {
+    await call("PUT", "/admin/api/ai", { protocol: ai.protocol, baseUrl: ai.baseUrl, model: ai.model, apiKey: ai.apiKey, prompts: ai.prompts });
+    await loadAi();
+  }, "已保存");
+
+/** Tests what is saved, so the settings on screen are saved first. */
+const tryAi = () =>
+  run(async () => {
+    tried.value = null;
+    await call("PUT", "/admin/api/ai", { protocol: ai.protocol, baseUrl: ai.baseUrl, model: ai.model, apiKey: ai.apiKey, prompts: ai.prompts });
+    await loadAi();
+    tried.value = await call("POST", "/admin/api/ai/test", { feature: feature.value });
+  });
+
 /** Loads what the signed-in pages show. */
 async function opened() {
   account.username = me.value.username;
   if (me.value.mustChange) return;
   await loadPrograms();
+  await loadAi();
   Object.assign(release, await call("GET", "/v1/update").catch(() => ({})));
 }
 
@@ -169,7 +194,7 @@ onMounted(async () => {
     <header>
       <strong>RID</strong>
       <nav>
-        <button v-for="[id, label] in [['rules', '规则库'], ['release', '版本'], ['account', '账号']]" :key="id" :class="{ active: tab === id }" @click="show(id)">{{ label }}</button>
+        <button v-for="[id, label] in [['rules', '规则库'], ['ai', 'AI'], ['release', '版本'], ['account', '账号']]" :key="id" :class="{ active: tab === id }" @click="show(id)">{{ label }}</button>
       </nav>
       <span class="spacer"></span>
       <span class="note">{{ me.username }}</span>
@@ -200,6 +225,40 @@ onMounted(async () => {
         </div>
       </form>
     </section>
+
+    <form v-else-if="tab === 'ai'" class="pane wide" @submit.prevent="saveAi">
+      <div class="row">
+        <select v-model="ai.protocol" class="input fixed" aria-label="协议">
+          <option value="chat">OpenAI chat/completions</option>
+          <option value="responses">OpenAI responses</option>
+          <option value="messages">Anthropic messages</option>
+        </select>
+        <input v-model.trim="ai.baseUrl" class="input" placeholder="接口地址，含版本段（如 https://api.example.com/v1）；留空则关闭 AI" spellcheck="false" />
+      </div>
+      <div class="row">
+        <input v-model.trim="ai.model" class="input" placeholder="模型名称" spellcheck="false" />
+        <input v-model="ai.apiKey" class="input" type="password" autocomplete="off" :placeholder="ai.hasKey ? '密钥已保存，留空则不修改' : 'API 密钥'" />
+      </div>
+      <p v-if="ai.fromEnvironment" class="note">当前使用的是 .env 里的配置；在这里保存后以这里为准。</p>
+
+      <nav class="tabs">
+        <button v-for="[id, label] in features" :key="id" type="button" :class="{ active: feature === id }" @click="(feature = id), (tried = null)">{{ label }}</button>
+      </nav>
+      <textarea v-model="ai.prompts[feature]" class="input prompt" spellcheck="false" aria-label="提示词"></textarea>
+      <div class="row">
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <p v-else class="ok">{{ done }}</p>
+        <span class="spacer"></span>
+        <button type="button" class="btn" :disabled="busy || ai.prompts[feature] === ai.defaults[feature]" @click="ai.prompts[feature] = ai.defaults[feature]">恢复默认</button>
+        <button type="button" class="btn" :disabled="busy" @click="tryAi">{{ busy ? "请稍候…" : "保存并测试" }}</button>
+        <button class="btn primary" :disabled="busy">保存</button>
+      </div>
+      <div v-if="tried" class="tried">
+        <p><strong>{{ tried.verdict }}</strong> · {{ tried.confidence }}</p>
+        <p>{{ tried.summary }}</p>
+        <ul><li v-for="p in tried.points" :key="p">{{ p }}</li></ul>
+      </div>
+    </form>
 
     <form v-else-if="tab === 'release'" class="pane narrow" @submit.prevent="publish">
       <input v-model.trim="release.version" class="input" placeholder="版本号（如 0.2.0）" pattern="\d+\.\d+\.\d+" required />

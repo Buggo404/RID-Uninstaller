@@ -257,3 +257,39 @@ nav button.active,
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+.pane.wide {
+  flex: none;
+  width: min(820px, 100%);
+}
+
+.input.fixed {
+  flex: none;
+  width: 210px;
+}
+
+select.input {
+  padding: 0 6px;
+}
+
+.tabs {
+  margin-top: 6px;
+}
+
+textarea.prompt {
+  min-height: 300px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.tried {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.tried ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}

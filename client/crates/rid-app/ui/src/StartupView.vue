@@ -9,7 +9,7 @@ import { prefs } from "./prefs";
 import RSelect from "./RSelect.vue";
 import { filter, refreshStartup, startup, startupGroupOf } from "./store";
 import TableHead from "./TableHead.vue";
-import { confirmBox, showMenu } from "./ui";
+import { asking, confirmBox, showMenu } from "./ui";
 
 const selectedKey = ref<string | null>(null);
 const brokenIcons = ref(new Set<string>());
@@ -65,12 +65,20 @@ const remove = (i: StartupItem) =>
     if (await confirmBox(question)) await api.startupDelete(i.source, i.name);
   });
 
+const ask = (i: StartupItem) =>
+  (asking.value = {
+    title: i.title,
+    icon: hasIcon(i) ? iconUrl(i.exe) : undefined,
+    question: { feature: "startup", title: i.title, command: i.command, exe: i.exe, company: i.company, source: t(`st.${i.source}`), status: i.status },
+  });
+
 function openContext(i: StartupItem, e: MouseEvent) {
   selectedKey.value = keyOf(i);
   showMenu(e, [
     { label: t(i.status === "disabled" ? "st.enable" : "st.disable"), key: "Space", disabled: !i.can_disable, run: () => toggle(i) },
     { label: t("st.delete"), key: "Shift+Del", disabled: i.source === "store_app", run: () => remove(i) },
     { sep: true },
+    { label: t("act.askAi"), run: () => ask(i) },
     { label: t("st.openLocation"), disabled: !folderOf(i), run: () => api.openFolder(folderOf(i)).catch(report) },
     { label: t("st.copyCommand"), disabled: !i.command, run: () => navigator.clipboard.writeText(i.command).catch(report) },
   ]);
@@ -172,6 +180,7 @@ onMounted(reload);
               {{ t(current.status === "disabled" ? "st.enable" : "st.disable") }}
             </button>
             <button v-if="current.source !== 'store_app'" type="button" class="btn danger" @click="remove(current)">{{ t("st.delete") }}</button>
+            <button type="button" class="btn" @click="ask(current)">{{ t("act.askAi") }}</button>
           </div>
           <dl class="props">
             <dt>{{ t("st.colStatus") }}</dt>

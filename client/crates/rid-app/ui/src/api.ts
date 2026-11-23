@@ -42,6 +42,7 @@ export const api = {
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   appVersion: () => invoke<string>("app_version"),
   clipboardText: () => invoke<string>("clipboard_text"),
+  aiAsk: (question: Question, lang: string) => invoke<Answer>("ai_ask", { question, lang }),
   checkUpdate: () => invoke<{ version: string; url: string; notes: string } | null>("check_update"),
   openRegistry: (keyPath: string) => invoke<void>("open_registry", { keyPath }),
   systemTool: (name: string) => invoke<void>("system_tool", { name }),
@@ -83,6 +84,19 @@ export const api = {
   setContextMenu: (enabled: boolean, traceLabel: string, uninstallLabel: string) =>
     invoke<void>("set_context_menu", { enabled, traceLabel, uninstallLabel }),
 };
+
+/** What the model is asked about; the facts themselves are collected by the backend. */
+export type Question =
+  | { feature: "program"; id: string }
+  | { feature: "startup"; title: string; command: string; exe: string; company: string; source: string; status: string }
+  | { feature: "leftover"; app_id: string; target: Target; evidence: string; size_kb: number; documents: number };
+
+export interface Answer {
+  summary: string;
+  verdict: "safe" | "caution" | "keep" | "unknown";
+  confidence: "high" | "medium" | "low";
+  points: string[];
+}
 
 export type LaunchRequest =
   | { kind: "trace"; path: string }

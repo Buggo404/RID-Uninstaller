@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { actionItems, canUninstall, jump } from "./actions";
+import { actionItems, askAbout, canUninstall, jump } from "./actions";
 import { type App, SOURCES, appIcon, formatSize } from "./api";
 import { useColumns } from "./columns";
 import { type MsgKey, lang, t } from "./i18n";
@@ -195,6 +195,7 @@ const hasIcon = (a: App) => appIcon(a) !== "" && !brokenIcons.value.has(a.id);
           <button v-else-if="canUninstall(current)" type="button" class="btn danger" @click="start('uninstall')">{{ t("panel.uninstall") }}</button>
           <button v-if="current.modify_path" type="button" class="btn" @click="start('modify')">{{ t("panel.modify") }}</button>
           <button type="button" class="btn" @click="start('force')">{{ t("act.force") }}</button>
+          <button type="button" class="btn" @click="askAbout(current)">{{ t("act.askAi") }}</button>
         </div>
         <dl class="props">
           <template v-if="SOURCES[current.source]">

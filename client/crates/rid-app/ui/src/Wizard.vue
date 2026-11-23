@@ -6,6 +6,7 @@ import { type App, type Leftover, type Proc, type Report, api, formatSize, iconU
 import { t } from "./i18n";
 import { prefs } from "./prefs";
 import type { JobMode } from "./store";
+import { asking, showMenu } from "./ui";
 
 const props = defineProps<{ mode: JobMode; apps: App[]; ask?: boolean }>();
 const emit = defineEmits<{ close: [changed: boolean] }>();
@@ -139,6 +140,12 @@ function forceFailed() {
   scan();
 }
 
+function askLeftover(l: Leftover, e: MouseEvent) {
+  const { app_id, target, evidence, size_kb, documents } = l;
+  const question = { feature: "leftover" as const, app_id, target, evidence, size_kb, documents };
+  showMenu(e, [{ label: t("act.askAi"), run: () => (asking.value = { title: targetText(target), question }) }]);
+}
+
 function setGroup(items: { checked: boolean }[], checked: boolean) {
   for (const item of items) item.checked = checked;
 }
@@ -257,7 +264,7 @@ onMounted(() =>
             />
             {{ g.title }}
           </label>
-          <label v-for="(l, i) in g.items" :key="i" class="trace">
+          <label v-for="(l, i) in g.items" :key="i" class="trace" @contextmenu.prevent.stop="askLeftover(l, $event)">
             <input v-model="l.checked" type="checkbox" />
             <span class="trace-path">
               <template v-if="l.target.kind === 'service'">{{ t("kind.service") }}: </template>{{ targetText(l.target) }}
@@ -271,7 +278,7 @@ onMounted(() =>
       <div class="dialog-buttons">
         <span class="note">{{ t("wiz.summary", groups[0].items.length, formatSize(fileKb) || "0 KB", groups[1].items.length) }}</span>
         <span class="spacer"></span>
-        <button type="button" class="btn ghost" @click="exportXml">{{ t("wiz.exportXml") }}</button>
+        <button type="button" class="btn" @click="exportXml">{{ t("wiz.exportXml") }}</button>
         <button type="button" class="btn" @click="close">{{ t("btn.cancel") }}</button>
         <button type="button" class="btn danger" :disabled="!found.some((l) => l.checked)" @click="finish">{{ t("wiz.finish") }}</button>
       </div>
@@ -296,7 +303,7 @@ onMounted(() =>
         <p v-if="result.batch" class="note">{{ t("wiz.undo") }}</p>
       </template>
       <div class="dialog-buttons">
-        <button v-if="result" type="button" class="btn ghost" @click="saveLog">{{ t("wiz.saveLog") }}</button>
+        <button v-if="result" type="button" class="btn" @click="saveLog">{{ t("wiz.saveLog") }}</button>
         <span class="spacer"></span>
         <button type="button" class="btn primary" autofocus @click="close">{{ t("btn.close") }}</button>
       </div>

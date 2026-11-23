@@ -719,3 +719,54 @@ input:is([type="checkbox"], [type="radio"]):disabled {
   min-width: 0;
   padding: 20px;
 }
+
+/* AI answers */
+
+.dialog.ai {
+  width: min(520px, 92vw);
+}
+
+.dialog.ai .panel-head {
+  margin-bottom: 14px;
+}
+
+.dialog.ai h2 {
+  margin: 0;
+}
+
+.ai-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.ai-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-answer ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.chip.safe {
+  background: color-mix(in srgb, var(--ok), transparent 84%);
+  color: var(--ok);
+}
+
+.chip.caution {
+  background: color-mix(in srgb, var(--warn), transparent 86%);
+  color: var(--warn);
+}
+
+.chip.keep {
+  background: color-mix(in srgb, var(--danger), transparent 86%);
+  color: var(--danger);
+}

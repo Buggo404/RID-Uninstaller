@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save } from "@tauri-apps/plugin-dialog";
 import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from "vue";
 import { actionItems, jump, report } from "./actions";
+import AiDialog from "./AiDialog.vue";
 import { type LaunchRequest, api, formatSize, targetText } from "./api";
 import HistoryDialog from "./HistoryDialog.vue";
 import { lang, t } from "./i18n";
@@ -34,7 +35,7 @@ import {
 } from "./store";
 import StartupView from "./StartupView.vue";
 import TraceDialog from "./TraceDialog.vue";
-import { confirmBox, menu, notify, prompt, showMenu } from "./ui";
+import { asking, confirmBox, menu, notify, prompt, showMenu } from "./ui";
 import logo from "../../icons/128x128.png";
 import UninstallerView from "./UninstallerView.vue";
 import Wizard from "./Wizard.vue";
@@ -513,6 +514,8 @@ onUnmounted(() => removeEventListener("keydown", onKey));
         <button class="btn primary" autofocus>{{ t("btn.close") }}</button>
       </form>
     </dialog>
+
+    <AiDialog v-if="asking" :key="JSON.stringify(asking.question)" v-bind="asking" @close="asking = null" />
 
     <!-- Last, so that it opens above whichever dialog asked. -->
     <PromptDialog v-if="prompt" :key="prompt.text" :prompt="prompt" />

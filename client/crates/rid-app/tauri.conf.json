@@ -26,20 +26,9 @@
     }
   },
   "bundle": {
-    "active": true,
-    "targets": ["nsis"],
+    "active": false,
     "icon": ["icons/icon.ico"],
     "publisher": "Rid",
-    "shortDescription": "Uninstall programs completely",
-    "resources": {
-      "../../target/release/rid.exe": "rid.exe",
-      "../../driver/rid-monitor/target/release/rid_monitor.dll": "RidMonitor.sys"
-    },
-    "windows": {
-      "nsis": {
-        "installMode": "perMachine",
-        "languages": ["SimpChinese", "English"]
-      }
-    }
+    "shortDescription": "Uninstall programs completely"
   }
 }

@@ -1,0 +1,109 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: client/crates/rid-app/pnpm-lock.yaml
+
+      - name: Tests
+        working-directory: client
+        run: cargo test -p rid-core
+
+      # The tracing driver is not built here: it needs the Windows Driver Kit and, to be of any
+      # use, Microsoft's signature. Once there is a signed RidMonitor.sys, pass it as RID_DRIVER.
+      - name: Program
+        working-directory: client/crates/rid-app
+        env:
+          RID_SERVER: ${{ vars.RID_SERVER }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm tauri build
+
+      - name: Command line
+        working-directory: client
+        run: cargo build --release -p rid-cli
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item client/target/release/rid-app.exe dist/RID-Uninstaller.exe
+          Copy-Item client/target/release/rid.exe dist/rid.exe
+          Get-FileHash dist/* -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RID-Uninstaller
+          path: dist/
+          if-no-files-found: error
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Server tests
+        working-directory: server
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm typecheck
+
+      - name: Admin interface
+        working-directory: server/web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Image
+        run: docker build server
+
+  # A tag starting with v produces a draft release. The files in it are not signed yet: sign them
+  # on the machine with the code-signing token (client/scripts/sign.ps1), replace them, then publish.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [client, server]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RID-Uninstaller
+          path: dist
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --draft --generate-notes --title "$GITHUB_REF_NAME"
