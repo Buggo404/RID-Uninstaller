@@ -128,7 +128,9 @@ mod tests {
     /// Needs administrator rights, as tracing does; without them there is nothing to test.
     #[test]
     fn what_a_command_creates_renames_and_deletes_is_recorded() {
-        let dir = std::env::temp_dir().join(format!("rid-trace-{}", std::process::id()));
+        // Windows reports full names; the temporary folder may be given in its short 8.3 form.
+        let temp = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+        let dir = std::path::PathBuf::from(temp.to_string_lossy().trim_start_matches(r"\\?\")).join(format!("rid-trace-{}", std::process::id()));
         let key = format!("RidTraceTest{}", std::process::id());
         let (d, k) = (dir.display(), format!("HKCU\\Software\\{key}"));
         let script = format!(

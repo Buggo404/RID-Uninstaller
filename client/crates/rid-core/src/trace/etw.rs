@@ -73,7 +73,9 @@ impl Session {
             check(result)?;
             let session = Session(handle);
             for (provider, keywords) in PROVIDERS {
-                check(EnableTraceEx2(handle, &provider, EVENT_CONTROL_CODE_ENABLE_PROVIDER.0, 5, keywords, 0, 0, None))?;
+                // With a timeout the call returns once the provider is really on. Without one it
+                // returns at once, and what the setup program does first would go unrecorded.
+                check(EnableTraceEx2(handle, &provider, EVENT_CONTROL_CODE_ENABLE_PROVIDER.0, 5, keywords, 0, 10_000, None))?;
             }
             Ok(session)
         }
