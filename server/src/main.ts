@@ -1,22 +1,51 @@
 import { timingSafeEqual } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { extname, join } from "node:path";
 import rateLimit from "@fastify/rate-limit";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { ask, invalidRelease, upstream } from "./ai.ts";
-import { find, migrate, pool, replace, setSetting, setting } from "./db.ts";
+import { type Admin, captchaPasses, changeCredentials, closeSession, cookieOf, ensureAdmin, invalidCredentials, newCaptcha, openSession, sessionAdmin, signIn } from "./auth.ts";
+import { find, migrate, pool, programs, remove, replace, setSetting, setting } from "./db.ts";
 import { invalid, isKey } from "./rules.ts";
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 if (ADMIN_TOKEN.length < 24) throw new Error("ADMIN_TOKEN must be set to at least 24 characters");
 const ai = upstream();
+const COOKIE = "rid_admin";
 
 // trustProxy: rate limits count the real client address when running behind a reverse proxy.
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 256 * 1024 });
 await app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
 
-function isAdmin(header: string | undefined): boolean {
+app.addHook("onRequest", async (request, reply) => {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "no-referrer");
+  // A page on another site must not be able to act with the administrator's session.
+  const origin = request.headers.origin;
+  if (origin && request.method !== "GET" && (!URL.canParse(origin) || new URL(origin).host !== request.headers.host)) {
+    return reply.code(403).send({ error: "cross-site request refused" });
+  }
+});
+
+function hasToken(header: string | undefined): boolean {
   const given = Buffer.from(header ?? "");
   const wanted = Buffer.from(`Bearer ${ADMIN_TOKEN}`);
   return given.length === wanted.length && timingSafeEqual(given, wanted);
+}
+
+const signedIn = (request: FastifyRequest) => sessionAdmin(cookieOf(request.headers.cookie, COOKIE));
+
+/** The token, or a signed-in administrator who is past the forced change of the initial password. */
+async function mayManage(request: FastifyRequest): Promise<boolean> {
+  return hasToken(request.headers.authorization) || (await signedIn(request))?.must_change === false;
+}
+
+const refuse = (reply: FastifyReply) => reply.code(401).send({ error: "administrator sign-in required" });
+
+function setCookie(request: FastifyRequest, reply: FastifyReply, token: string | null) {
+  const secure = request.protocol === "https" ? "; Secure" : "";
+  reply.header("Set-Cookie", `${COOKIE}=${token ?? ""}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${token ? 12 * 3600 : 0}${secure}`);
 }
 
 app.get("/healthz", async () => {
@@ -24,19 +53,25 @@ app.get("/healthz", async () => {
   return { ok: true, ai: ai ? { protocol: ai.protocol, model: ai.model } : null };
 });
 
+// Public: what the client asks
+
+app.get<{ Params: { key: string } }>("/v1/rules/:key", async (request, reply) => {
+  const { key } = request.params;
+  if (!isKey(key)) return reply.code(400).send({ error: "not a program key" });
+  const found = await find(key);
+  // "No rules" is cacheable too: most programs have none and clients should not keep asking.
+  reply.header("Cache-Control", "public, max-age=3600");
+  if (!found) return reply.code(404).send({ error: "no rules for this program" });
+  const etag = `"${found.revision}"`;
+  reply.header("ETag", etag);
+  if (request.headers["if-none-match"] === etag) return reply.code(304).send();
+  return found;
+});
+
 /** The release clients are told about; 404 until one is published. */
 app.get("/v1/update", async (_request, reply) => {
   reply.header("Cache-Control", "public, max-age=600");
   return (await setting("release")) ?? reply.code(404).send({ error: "no release published" });
-});
-
-app.put<{ Body: { version?: unknown; url?: unknown; notes?: unknown } }>("/v1/update", async (request, reply) => {
-  if (!isAdmin(request.headers.authorization)) return reply.code(401).send({ error: "administrator token required" });
-  const problem = invalidRelease(request.body);
-  if (problem) return reply.code(400).send({ error: problem });
-  const { version, url, notes = "" } = request.body;
-  await setSetting("release", { version, url, notes });
-  return { version };
 });
 
 const EXPLAIN = (language: string) =>
@@ -62,21 +97,10 @@ app.post<{ Body: { name?: unknown; publisher?: unknown; lang?: unknown } }>(
   },
 );
 
-app.get<{ Params: { key: string } }>("/v1/rules/:key", async (request, reply) => {
-  const { key } = request.params;
-  if (!isKey(key)) return reply.code(400).send({ error: "not a program key" });
-  const found = await find(key);
-  // "No rules" is cacheable too: most programs have none and clients should not keep asking.
-  reply.header("Cache-Control", "public, max-age=3600");
-  if (!found) return reply.code(404).send({ error: "no rules for this program" });
-  const etag = `"${found.revision}"`;
-  reply.header("ETag", etag);
-  if (request.headers["if-none-match"] === etag) return reply.code(304).send();
-  return found;
-});
+// Management: the token (scripts) or a signed-in administrator (web interface)
 
 app.put<{ Params: { key: string }; Body: { name?: unknown; rules?: unknown } }>("/v1/rules/:key", async (request, reply) => {
-  if (!isAdmin(request.headers.authorization)) return reply.code(401).send({ error: "administrator token required" });
+  if (!(await mayManage(request))) return refuse(reply);
   const { key } = request.params;
   const { name, rules } = request.body ?? {};
   if (!isKey(key)) return reply.code(400).send({ error: "not a program key" });
@@ -87,7 +111,92 @@ app.put<{ Params: { key: string }; Body: { name?: unknown; rules?: unknown } }>(
   return { key, revision: await replace(key, name.trim(), rules) };
 });
 
+app.delete<{ Params: { key: string } }>("/v1/rules/:key", async (request, reply) => {
+  if (!(await mayManage(request))) return refuse(reply);
+  return (await remove(request.params.key)) ? { ok: true } : reply.code(404).send({ error: "no rules for this program" });
+});
+
+app.put<{ Body: { version?: unknown; url?: unknown; notes?: unknown } }>("/v1/update", async (request, reply) => {
+  if (!(await mayManage(request))) return refuse(reply);
+  const problem = invalidRelease(request.body);
+  if (problem) return reply.code(400).send({ error: problem });
+  const { version, url, notes = "" } = request.body;
+  await setSetting("release", { version, url, notes });
+  return { version };
+});
+
+// The web interface's own requests. Nothing here may be cached or kept by a proxy.
+
+const strict = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } };
+const describe = (admin: Admin) => ({ username: admin.username, mustChange: admin.must_change });
+
+app.addHook("onSend", async (request, reply) => {
+  if (request.url.startsWith("/admin/api/")) reply.header("Cache-Control", "no-store");
+});
+
+app.get("/admin/api/captcha", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async () => newCaptcha());
+
+app.post<{ Body: { username?: unknown; password?: unknown; captchaId?: unknown; captcha?: unknown } }>("/admin/api/login", strict, async (request, reply) => {
+  const { username, password, captchaId, captcha } = request.body ?? {};
+  if (!captchaPasses(captchaId, captcha)) return reply.code(400).send({ error: "验证码不正确" });
+  if (typeof username !== "string" || typeof password !== "string" || password.length > 200) return reply.code(400).send({ error: "用户名或密码不正确" });
+  const admin = await signIn(username, password);
+  if (admin === "locked") return reply.code(429).send({ error: "尝试次数过多，请 15 分钟后再试" });
+  if (!admin) return reply.code(401).send({ error: "用户名或密码不正确" });
+  setCookie(request, reply, await openSession(admin.id));
+  return describe(admin);
+});
+
+app.post("/admin/api/logout", async (request, reply) => {
+  await closeSession(cookieOf(request.headers.cookie, COOKIE));
+  setCookie(request, reply, null);
+  return { ok: true };
+});
+
+app.get("/admin/api/me", async (request, reply) => {
+  const admin = await signedIn(request);
+  return admin ? describe(admin) : refuse(reply);
+});
+
+app.post<{ Body: { currentPassword?: unknown; username?: unknown; password?: unknown } }>("/admin/api/account", strict, async (request, reply) => {
+  const admin = await signedIn(request);
+  if (!admin) return refuse(reply);
+  const { currentPassword, username, password } = request.body ?? {};
+  const problem = invalidCredentials(username, password) ?? (typeof currentPassword === "string" ? null : "当前密码不正确");
+  if (problem) return reply.code(400).send({ error: problem });
+  const failure = await changeCredentials(admin, currentPassword as string, username as string, password as string);
+  if (failure) return reply.code(400).send({ error: failure });
+  // Every session was closed with the old password; this browser gets a fresh one.
+  setCookie(request, reply, await openSession(admin.id));
+  return { username, mustChange: false };
+});
+
+app.get("/admin/api/programs", async (request, reply) => ((await mayManage(request)) ? programs() : refuse(reply)));
+
+// The built web interface (web/dist), read once at start.
+
+const WEB = join(import.meta.dirname, "../web/dist");
+const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
+if (existsSync(WEB)) {
+  const files = new Map<string, { body: Buffer; type: string }>();
+  for (const name of readdirSync(WEB, { recursive: true }) as string[]) {
+    const type = TYPES[extname(name)];
+    if (type) files.set(name.replaceAll("\\", "/"), { body: readFileSync(join(WEB, name)), type });
+  }
+  const page = (request: FastifyRequest<{ Params: { "*"?: string } }>, reply: FastifyReply) => {
+    const asset = files.get(request.params["*"] ?? "");
+    const file = asset ?? files.get("index.html")!;
+    // Scripts and styles only from this server; nothing may frame the page or receive its forms.
+    reply.header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'; base-uri 'none'");
+    reply.header("Cache-Control", asset && request.params["*"]?.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache");
+    return reply.type(file.type).send(file.body);
+  };
+  app.get("/admin", page);
+  app.get("/admin/*", page);
+}
+
 await migrate();
+await ensureAdmin();
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 8080) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

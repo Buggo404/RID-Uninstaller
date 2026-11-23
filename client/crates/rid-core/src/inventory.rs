@@ -232,11 +232,15 @@ fn registry_app(key: &RegKey, hive: &str, key_name: &str, is_32bit: bool) -> Opt
         uninstall_string,
         quiet_uninstall_string: text("QuietUninstallString"),
         modify_path: if flag("NoModify") { String::new() } else { modify_path },
-        icon: [text("DisplayIcon").trim_matches('"'), cmdline::exe_of(&text("UninstallString")).unwrap_or_default()]
-            .into_iter()
-            .find(|i| !i.is_empty())
-            .unwrap_or_default()
-            .to_string(),
+        icon: {
+            let shown = text("DisplayIcon").trim_matches('"').to_string();
+            // Without one, an MSI product's icon is the one Installer keeps; any other program's is its uninstaller's.
+            let fallback = || match is_msi {
+                true => msi::product_icon(key_name),
+                false => cmdline::exe_of(&text("UninstallString")).map(|exe| exe.to_string()),
+            };
+            if shown.is_empty() { fallback().unwrap_or_default() } else { shown }
+        },
         url,
         reg_path: format!(
             "{}\\{}\\{key_name}",

@@ -24,6 +24,17 @@ pub fn packed_product_code(guid: &str) -> Option<String> {
     Some(out.to_uppercase())
 }
 
+/// The icon Windows Installer keeps for a product, if it was given one.
+pub fn product_icon(product_code: &str) -> Option<String> {
+    let packed = packed_product_code(product_code)?;
+    [(HKEY_LOCAL_MACHINE, r"SOFTWARE\Classes\Installer\Products"), (winreg::enums::HKEY_CURRENT_USER, r"Software\Microsoft\Installer\Products")]
+        .into_iter()
+        .find_map(|(hive, path)| {
+            let product = RegKey::predef(hive).open_subkey_with_flags(format!(r"{path}\{packed}"), KEY_READ | KEY_WOW64_64KEY).ok()?;
+            product.get_value::<String, _>("ProductIcon").ok().filter(|icon| !icon.is_empty())
+        })
+}
+
 /// For every installed product (by packed code): the key files of its components.
 /// The component list is shared by all products and runs to tens of thousands of keys,
 /// so it is read by several threads at once.

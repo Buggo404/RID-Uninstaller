@@ -86,6 +86,13 @@ p {
   margin: 0;
 }
 
+/* Nothing is picked up by dragging: only text meant for copying can be selected. */
+img,
+svg,
+a {
+  -webkit-user-drag: none;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -101,6 +108,10 @@ p {
   background-clip: content-box;
   border: 3px solid transparent;
   border-radius: 5px;
+}
+
+::-webkit-scrollbar-corner {
+  background: none;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -327,30 +338,9 @@ p {
   padding-left: 30px;
 }
 
-.seg {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  background: var(--hover);
-}
-
-.seg button {
-  height: 24px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 5px;
-  background: none;
-  color: var(--muted);
-  transition:
-    background-color 0.2s var(--ease),
-    color 0.2s var(--ease);
-}
-
-.seg button.active {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 0 0 1px var(--border);
+.header-select {
+  flex: none;
+  width: 132px;
 }
 
 .status {
@@ -416,8 +406,73 @@ p {
   color: var(--text);
 }
 
+.list th button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  touch-action: none;
+}
+
+.list th.dragging button {
+  color: var(--text);
+  opacity: 0.5;
+}
+
+.list th.drop-before {
+  box-shadow:
+    inset 2px 0 var(--accent),
+    inset 0 -1px var(--border);
+}
+
+.list th.drop-after {
+  box-shadow:
+    inset -2px 0 var(--accent),
+    inset 0 -1px var(--border);
+}
+
+.col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.col-resize::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 0;
+  bottom: 9px;
+  width: 1px;
+  background: var(--border-strong);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.list thead:hover .col-resize::after {
+  opacity: 1;
+}
+
+.col-resize:hover::after,
+.col-resize:active::after {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
 .sort {
   display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   transition: transform 0.3s var(--spring);
 }
 
@@ -437,6 +492,9 @@ p {
 
 .list td:first-child {
   padding-left: 18px;
+}
+
+.list td.col-name {
   color: var(--text);
 }
 
@@ -672,27 +730,28 @@ mark {
 .window-buttons button {
   display: grid;
   place-content: center;
-  width: 44px;
+  width: 46px;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--muted);
+  color: var(--text);
   transition:
     background-color 0.15s var(--ease),
     color 0.15s;
 }
 
+/* Drawn on whole pixels, like the system's own caption buttons. */
 .window-buttons svg {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.1;
+  stroke-width: 1;
+  shape-rendering: geometricPrecision;
 }
 
 .window-buttons button:hover {
-  background: var(--hover);
-  color: var(--text);
+  background: var(--active);
 }
 
 .window-buttons button.close:hover {

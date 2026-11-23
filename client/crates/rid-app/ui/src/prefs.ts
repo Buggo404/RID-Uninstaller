@@ -7,6 +7,8 @@ const defaults = {
   lang: "auto" as "auto" | "en" | "zh",
   theme: "auto" as "auto" | "light" | "dark",
   compact: false,
+  /** Per table: the user's column order and the widths they dragged columns to. */
+  tables: {} as Record<string, { order: string[]; widths: Record<string, number> }>,
   /** Whether the navigation sidebar is expanded, and whether the details panel is shown. */
   sidebar: true,
   details: true,
@@ -32,6 +34,7 @@ export const prefs = reactive<Prefs>(structuredClone(defaults));
 export function resetColumns() {
   prefs.columns = structuredClone(defaults.columns);
   prefs.sort = structuredClone(defaults.sort);
+  prefs.tables = {};
 }
 
 export async function loadPrefs() {

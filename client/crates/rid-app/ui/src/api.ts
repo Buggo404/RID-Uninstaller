@@ -41,6 +41,7 @@ export const api = {
   openFolder: (path: string) => invoke<void>("open_folder", { path }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   appVersion: () => invoke<string>("app_version"),
+  clipboardText: () => invoke<string>("clipboard_text"),
   checkUpdate: (server: string) => invoke<{ version: string; url: string; notes: string } | null>("check_update", { server }),
   openRegistry: (keyPath: string) => invoke<void>("open_registry", { keyPath }),
   systemTool: (name: string) => invoke<void>("system_tool", { name }),
@@ -198,6 +199,12 @@ export function targetText(t: Target): string {
 export function iconUrl(source: string): string {
   const hex = Array.from(new TextEncoder().encode(source), (b) => b.toString(16).padStart(2, "0")).join("");
   return convertFileSrc(hex, "icon");
+}
+
+/** A program's icon: the one it names, else that of the main program in its folder, else (for MSI products) Installer's own. */
+export function appIcon(a: App): string {
+  const sources = [a.icon, a.install_location, a.is_msi ? "MsiExec.exe" : ""].filter(Boolean);
+  return sources.length ? iconUrl(sources.join("|")) : "";
 }
 
 export function formatSize(kb: number | null | undefined): string {

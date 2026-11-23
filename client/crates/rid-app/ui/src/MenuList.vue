@@ -21,20 +21,23 @@ function pick(item: MenuItem) {
 </script>
 
 <template>
-  <ul class="menu" role="menu">
+  <ul class="menu" role="menu" @click.stop @contextmenu.prevent.stop>
     <template v-for="(item, i) in items" :key="i">
       <li v-if="item.sep" class="menu-sep" role="separator"></li>
       <li v-else class="menu-item" role="none">
+        <!-- mousedown.prevent: the field a menu was opened on keeps the focus its commands act on. -->
         <button
           type="button"
           role="menuitem"
           :disabled="item.disabled"
           :aria-haspopup="item.children ? 'menu' : undefined"
+          @mousedown.prevent
           @click="pick(item)"
         >
-          <span class="menu-check" aria-hidden="true">{{ item.checked ? "✓" : "" }}</span>
+          <svg class="menu-check" viewBox="0 0 12 12" aria-hidden="true"><path v-if="item.checked" d="M2.5 6.5l2.5 2.5 4.5-5.5" /></svg>
           <span class="menu-label">{{ item.label }}</span>
-          <span class="menu-key">{{ item.children ? "▸" : item.key }}</span>
+          <svg v-if="item.children" class="menu-more" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5L8 6l-3.5 3.5" /></svg>
+          <span v-else class="menu-key">{{ item.key }}</span>
         </button>
         <MenuList v-if="item.children && !item.disabled" class="submenu" :items="item.children" @close="emit('close')" />
       </li>

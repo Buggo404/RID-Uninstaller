@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
@@ -11,7 +11,7 @@ use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
 use rid_core::{driver, icons, paths, rules, shell, startup, trace, traced, uninstall, update};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Emitter, Manager};
 use tauri::http::{Response, StatusCode};
@@ -20,6 +20,11 @@ type CmdResult<T = ()> = Result<T, String>;
 
 fn err(e: impl ToString) -> String {
     e.to_string()
+}
+
+/// The window has its own words for a driver Windows refuses for its signature.
+fn driver_err(e: std::io::Error) -> String {
+    if e.raw_os_error() == Some(driver::UNSIGNED) { "driver-unsigned".into() } else { err(e) }
 }
 
 #[derive(Default)]
@@ -122,7 +127,7 @@ fn driver_status() -> driver::Status {
 #[tauri::command(async)]
 fn driver_install() -> CmdResult {
     let image = std::env::current_exe().map_err(err)?.with_file_name("RidMonitor.sys");
-    driver::install(&image).map_err(err)
+    driver::install(&image).map_err(driver_err)
 }
 
 #[tauri::command(async)]
@@ -145,7 +150,7 @@ fn trace_run(app: tauri::AppHandle, state: State, path: String, arguments: Strin
     if !Path::new(&path).is_file() {
         return Err(format!("no such file: {path}"));
     }
-    driver::load().map_err(|e| format!("The tracing driver is not available: {e}"))?;
+    driver::load().map_err(driver_err)?;
     let is_msi = Path::new(&path).extension().is_some_and(|x| x.eq_ignore_ascii_case("msi"));
     let command = match is_msi {
         true => format!("msiexec.exe /i \"{path}\" {arguments}"),
@@ -212,7 +217,7 @@ fn trace_forget(id: String) -> CmdResult {
     traced::forget(&id).map_err(err)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum Launch {
     /// `--trace <setup file>`
@@ -225,10 +230,14 @@ enum Launch {
     StoreApps,
 }
 
-/// What the command line asked for (Explorer's context menu starts Rid this way).
+/// What this process was started for.
 #[tauri::command(async)]
 fn launch_request(state: State) -> CmdResult<Option<Launch>> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    launch(&std::env::args().skip(1).collect::<Vec<_>>(), &state)
+}
+
+/// What a command line asks for (Explorer's context menu starts Rid this way).
+fn launch(args: &[String], state: &AppState) -> CmdResult<Option<Launch>> {
     Ok(match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         ["--trace", path] => Some(Launch::Trace { path: path.into() }),
         ["--uninstall-shortcut", shortcut] => {
@@ -261,6 +270,11 @@ fn open_folder(path: String) -> CmdResult {
 #[tauri::command]
 fn open_url(url: String) -> CmdResult {
     shell::open_url(&url).map_err(err)
+}
+
+#[tauri::command]
+fn clipboard_text() -> String {
+    shell::clipboard_text()
 }
 
 #[tauri::command]
@@ -481,6 +495,8 @@ fn startup_list(state: State) -> CmdResult<Vec<startup::Item>> {
             full_name(a).is_some_and(|f| f.starts_with(&format!("{name}_")) && f.ends_with(&format!("_{publisher_id}")))
         }) {
             item.title = app.name.clone();
+            // A Store task names no program file; the app's logo is shown as its icon instead.
+            item.exe = app.icon.clone();
             item.company = app.publisher.clone();
         }
     }
@@ -520,6 +536,54 @@ fn icon_response(path: &str) -> Response<Vec<u8>> {
     response.expect("static headers are valid")
 }
 
+#[derive(Serialize, Deserialize)]
+struct WindowPlace {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    maximized: bool,
+}
+
+fn window_file() -> PathBuf {
+    paths::data_dir().join("window.json")
+}
+
+fn saved_place() -> Option<WindowPlace> {
+    serde_json::from_slice(&fs::read(window_file()).ok()?).ok()
+}
+
+/// Puts the window where it was when it was last closed, unless no screen shows that place any more.
+fn restore_window(window: &tauri::WebviewWindow) {
+    let Some(place) = saved_place() else { return };
+    let visible = window.available_monitors().unwrap_or_default().iter().any(|m| {
+        let (origin, size) = (m.position(), m.size());
+        // Enough of the title bar to grab the window by.
+        (origin.x - place.width as i32 + 120..origin.x + size.width as i32 - 120).contains(&place.x)
+            && (origin.y - 8..origin.y + size.height as i32 - 60).contains(&place.y)
+    });
+    if visible && place.width >= 300 && place.height >= 200 {
+        let _ = window.set_size(tauri::PhysicalSize::new(place.width, place.height));
+        let _ = window.set_position(tauri::PhysicalPosition::new(place.x, place.y));
+    }
+    if place.maximized {
+        let _ = window.maximize();
+    }
+}
+
+fn save_window(window: &tauri::Window) {
+    let maximized = window.is_maximized().unwrap_or(false);
+    // A maximized or minimized window reports that state's rectangle; the one to come back to is the last normal one.
+    let place = match (maximized || window.is_minimized().unwrap_or(false), saved_place(), window.outer_position(), window.inner_size()) {
+        (true, Some(previous), ..) => WindowPlace { maximized, ..previous },
+        (false, _, Ok(at), Ok(size)) => WindowPlace { x: at.x, y: at.y, width: size.width, height: size.height, maximized },
+        _ => return,
+    };
+    if let Ok(json) = serde_json::to_vec(&place) {
+        let _ = fs::create_dir_all(paths::data_dir()).and_then(|()| fs::write(window_file(), json));
+    }
+}
+
 fn main() {
     // A few workers, however many icons the list asks for: one thread per request would
     // mean hundreds of threads on a machine with many programs.
@@ -539,12 +603,28 @@ fn main() {
     }
     inventory::warm_up();
     tauri::Builder::default()
+        // Starting Rid again hands the request to the window that is already open.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            if let Ok(Some(request)) = launch(args.get(1..).unwrap_or_default(), &app.state::<AppState>()) {
+                let _ = app.emit("launch", request);
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                save_window(window);
+            }
+        })
         .manage(AppState { prefetch: Mutex::new(Some(std::thread::spawn(inventory::list))), ..AppState::default() })
         .setup(|app| {
             // The window is created hidden and shown here in the theme's own colour, so
             // nothing white is on screen while the page loads.
             if let Some(window) = app.get_webview_window("main") {
+                restore_window(&window);
                 let dark = match load_prefs().get("theme").and_then(Value::as_str) {
                     Some("dark") => true,
                     Some("light") => false,
@@ -567,6 +647,7 @@ fn main() {
             open_url,
             open_registry,
             app_version,
+            clipboard_text,
             check_update,
             system_tool,
             load_prefs,

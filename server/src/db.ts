@@ -23,7 +23,32 @@ export async function migrate(): Promise<void> {
       key   text PRIMARY KEY,
       value jsonb NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS admins (
+      id            serial PRIMARY KEY,
+      username      text NOT NULL UNIQUE,
+      password_hash text NOT NULL,
+      must_change   boolean NOT NULL DEFAULT true,
+      failed        integer NOT NULL DEFAULT 0,
+      locked_until  timestamptz
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash text PRIMARY KEY,
+      admin_id   integer NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+      expires_at timestamptz NOT NULL
+    );
   `);
+}
+
+export async function programs(): Promise<unknown[]> {
+  const found = await pool.query(
+    `SELECT p.key, p.name, p.revision, count(r.id)::int AS rules
+     FROM programs p LEFT JOIN rules r ON r.program_key = p.key GROUP BY p.key ORDER BY p.name`,
+  );
+  return found.rows;
+}
+
+export async function remove(key: string): Promise<boolean> {
+  return !!(await pool.query("DELETE FROM programs WHERE key = $1", [key])).rowCount;
 }
 
 export async function setting(key: string): Promise<unknown> {

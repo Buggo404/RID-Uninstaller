@@ -1,15 +1,17 @@
 <script setup lang="ts">
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save } from "@tauri-apps/plugin-dialog";
 import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from "vue";
 import { actionItems, jump, report } from "./actions";
-import { api, formatSize, targetText } from "./api";
+import { type LaunchRequest, api, formatSize, targetText } from "./api";
 import HistoryDialog from "./HistoryDialog.vue";
 import { lang, t } from "./i18n";
 import MenuList, { type MenuItem } from "./MenuList.vue";
 import { prefs, resetColumns } from "./prefs";
 import PrefsDialog from "./PrefsDialog.vue";
 import PromptDialog from "./PromptDialog.vue";
+import RSelect from "./RSelect.vue";
 import {
   type ListCategory,
   type StartupGroup,
@@ -32,12 +34,44 @@ import {
 } from "./store";
 import StartupView from "./StartupView.vue";
 import TraceDialog from "./TraceDialog.vue";
-import { confirmBox, notify, prompt } from "./ui";
+import { confirmBox, menu, notify, prompt, showMenu } from "./ui";
 import logo from "../../icons/128x128.png";
 import UninstallerView from "./UninstallerView.vue";
 import Wizard from "./Wizard.vue";
 
 const win = getCurrentWindow();
+const maximized = ref(false);
+const caption = {
+  minimize: "M1 5.5h8",
+  maximize: "M3 1.5h4A1.5 1.5 0 0 1 8.5 3v4A1.5 1.5 0 0 1 7 8.5H3A1.5 1.5 0 0 1 1.5 7V3A1.5 1.5 0 0 1 3 1.5z",
+  restore: "M2.5 3.5h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z M3.5 1.5h3.5A1.5 1.5 0 0 1 8.5 3v3.5",
+  close: "M1.5 1.5l7 7M8.5 1.5l-7 7",
+};
+
+/** The browser's own menu never shows. Text fields and selected text get the editing commands; lists bring their own. */
+function onContext(e: MouseEvent) {
+  e.preventDefault();
+  const field = (e.target as Element).closest<HTMLInputElement>("input:not([type=checkbox], [type=radio]), textarea");
+  const picked = getSelection()?.toString() ?? "";
+  if (field && !field.disabled) {
+    field.focus();
+    const some = field.selectionStart !== field.selectionEnd;
+    const paste = (text: string) => {
+      field.focus();
+      field.setRangeText(text, field.selectionStart ?? 0, field.selectionEnd ?? 0, "end");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    showMenu(e, [
+      { label: t("edit.cut"), key: "Ctrl+X", disabled: !some || field.readOnly, run: () => document.execCommand("cut") },
+      { label: t("edit.copy"), key: "Ctrl+C", disabled: !some, run: () => document.execCommand("copy") },
+      { label: t("edit.paste"), key: "Ctrl+V", disabled: field.readOnly, run: () => api.clipboardText().then(paste, report) },
+      { sep: true },
+      { label: t("edit.selectAll"), key: "Ctrl+A", disabled: !field.value, run: () => field.select() },
+    ]);
+  } else if (picked.trim()) {
+    showMenu(e, [{ label: t("edit.copy"), key: "Ctrl+C", run: () => navigator.clipboard.writeText(picked).catch(report) }]);
+  } else menu.value = null;
+}
 const openMenu = ref(false);
 const searchInput = ref<HTMLInputElement>();
 const showPrefs = ref(false);
@@ -243,6 +277,7 @@ function onKey(e: KeyboardEvent) {
   if (ctrl && e.key.toLowerCase() === "s") return act(exportHtml);
   if (ctrl && e.key.toLowerCase() === "b") return act(() => (prefs.sidebar = !prefs.sidebar));
   if (e.key === "Escape") {
+    if (menu.value) return (menu.value = null);
     if (openMenu.value) return (openMenu.value = false);
     if (filter.value) return act(() => ((filter.value = ""), uninstaller.value?.focusList()));
   }
@@ -259,8 +294,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 /** Acts on what Explorer's context menu (or a command line) asked for, once the list is loaded. */
-async function handleLaunch() {
-  const request = await api.launchRequest();
+function handleLaunch(request: LaunchRequest | null) {
   if (!request) return;
   if (request.kind === "startup") view.value = "startup";
   else if (request.kind === "store_apps") category.value = "store";
@@ -277,7 +311,14 @@ async function handleLaunch() {
 
 onMounted(() => {
   addEventListener("keydown", onKey);
-  refresh().then(handleLaunch).catch(report);
+  addEventListener("contextmenu", onContext);
+  addEventListener("blur", () => (menu.value = null));
+  refresh().then(api.launchRequest).then(handleLaunch).catch(report);
+  // Rid started again while this window is open: the request comes here instead.
+  void listen<LaunchRequest>("launch", (e) => handleLaunch(e.payload));
+  const sized = () => win.isMaximized().then((is) => (maximized.value = is), console.error);
+  void win.onResized(sized);
+  sized();
   api.appVersion().then((v) => (version.value = v), console.error);
   checkUpdate(false);
 });
@@ -285,7 +326,7 @@ onUnmounted(() => removeEventListener("keydown", onKey));
 </script>
 
 <template>
-  <div class="app" @click="openMenu = false">
+  <div class="app" @click="(openMenu = false), (menu = null)">
     <nav class="sidebar" :class="{ collapsed: !prefs.sidebar }">
       <div class="brand" data-tauri-drag-region>
         <!-- The mark opens the menu too: it is all that is left of this row when the sidebar is collapsed. -->
@@ -369,19 +410,7 @@ onUnmounted(() => removeEventListener("keydown", onKey));
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.sidebar" /></svg>
         </button>
         <h1 data-tauri-drag-region>{{ title }}</h1>
-        <div v-if="view === 'startup'" class="seg" role="tablist">
-          <button
-            v-for="g in startupGroups"
-            :key="g"
-            type="button"
-            role="tab"
-            :aria-selected="startup.group === g"
-            :class="{ active: startup.group === g }"
-            @click="startup.group = g"
-          >
-            {{ t(`st.${g}`) }}
-          </button>
-        </div>
+        <RSelect v-if="view === 'startup'" v-model="startup.group" class="header-select" :options="startupGroups.map((g) => ({ value: g, label: t(`st.${g}`) }))" />
         <span class="spacer drag" data-tauri-drag-region></span>
         <div class="search">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 12A5 5 0 1 0 7 2a5 5 0 0 0 0 10zM14 14l-3.5-3.5" /></svg>
@@ -396,7 +425,9 @@ onUnmounted(() => removeEventListener("keydown", onKey));
             :placeholder="t('panel.searchTip')"
           />
         </div>
-        <button v-if="view === 'startup'" type="button" class="btn" @click="startup.adding = true">{{ t("st.add") }}</button>
+        <button v-if="view === 'startup'" type="button" class="icon-btn" :title="t('st.add')" :aria-label="t('st.add')" @click="startup.adding = true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
         <button
           type="button"
           class="icon-btn"
@@ -409,7 +440,6 @@ onUnmounted(() => removeEventListener("keydown", onKey));
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.refresh" /></svg>
         </button>
         <button
-          v-if="view === 'uninstaller'"
           type="button"
           class="icon-btn"
           :aria-expanded="prefs.details"
@@ -421,13 +451,13 @@ onUnmounted(() => removeEventListener("keydown", onKey));
         </button>
         <div class="window-buttons">
           <button type="button" :aria-label="t('win.minimize')" @click="win.minimize()">
-            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" /></svg>
+            <svg viewBox="0 0 10 10" aria-hidden="true"><path :d="caption.minimize" /></svg>
           </button>
-          <button type="button" :aria-label="t('win.maximize')" @click="win.toggleMaximize()">
-            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5h7v7h-7z" /></svg>
+          <button type="button" :aria-label="t(maximized ? 'win.restore' : 'win.maximize')" @click="win.toggleMaximize()">
+            <svg viewBox="0 0 10 10" aria-hidden="true"><path :d="maximized ? caption.restore : caption.maximize" /></svg>
           </button>
           <button type="button" class="close" :aria-label="t('win.close')" @click="win.close()">
-            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" /></svg>
+            <svg viewBox="0 0 10 10" aria-hidden="true"><path :d="caption.close" /></svg>
           </button>
         </div>
       </header>
@@ -474,5 +504,9 @@ onUnmounted(() => removeEventListener("keydown", onKey));
 
     <!-- Last, so that it opens above whichever dialog asked. -->
     <PromptDialog v-if="prompt" :key="prompt.text" :prompt="prompt" />
+
+    <Teleport v-if="menu" :to="menu.host">
+      <MenuList :key="`${menu.x},${menu.y}`" class="context" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" :items="menu.items" @close="menu = null" />
+    </Teleport>
   </div>
 </template>

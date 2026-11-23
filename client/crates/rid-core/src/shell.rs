@@ -120,3 +120,34 @@ mod tests {
         assert!(system_tool("cmd.exe").is_err());
     }
 }
+
+/// The text on the clipboard; empty when it holds none.
+pub fn clipboard_text() -> String {
+    use windows::Win32::Foundation::HGLOBAL;
+    use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+    use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+    const CF_UNICODETEXT: u32 = 13;
+    // SAFETY: the clipboard is open while its data is read; the text block is NUL-terminated
+    // UTF-16 owned by the clipboard and is only read while locked.
+    unsafe {
+        if OpenClipboard(None).is_err() {
+            return String::new();
+        }
+        let text = GetClipboardData(CF_UNICODETEXT)
+            .ok()
+            .map(|handle| {
+                let block = HGLOBAL(handle.0);
+                let data = GlobalLock(block) as *const u16;
+                if data.is_null() {
+                    return String::new();
+                }
+                let len = (0..).take_while(|&i| *data.add(i) != 0).count();
+                let text = String::from_utf16_lossy(std::slice::from_raw_parts(data, len));
+                let _ = GlobalUnlock(block);
+                text
+            })
+            .unwrap_or_default();
+        let _ = CloseClipboard();
+        text
+    }
+}

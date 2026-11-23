@@ -1,34 +1,29 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { actionItems, canUninstall, jump } from "./actions";
-import { type App, SOURCES, formatSize, iconUrl } from "./api";
+import { type App, SOURCES, appIcon, formatSize } from "./api";
+import { useColumns } from "./columns";
 import { type MsgKey, lang, t } from "./i18n";
-import MenuList from "./MenuList.vue";
 import { type SortKey, prefs } from "./prefs";
 import { type Row, category, current, filter, isRecent, loading, rows, selected, selection, setOpen, sizeOf, start } from "./store";
+import TableHead from "./TableHead.vue";
+import { showMenu } from "./ui";
 
 const listEl = ref<HTMLElement>();
-const context = ref<{ x: number; y: number } | null>(null);
 const brokenIcons = ref(new Set<string>());
 let anchor: string | null = null;
 
 defineExpose({ focusList: () => listEl.value?.focus() });
 
-const columns = computed(() =>
-  (
-    [
-      { key: "name", width: "", on: true },
-      { key: "size", width: "92px", on: prefs.columns.size },
-      { key: "date", width: "124px", on: prefs.columns.date },
-      { key: "publisher", width: "190px", on: prefs.columns.publisher },
-      { key: "version", width: "130px", on: prefs.columns.version },
-      { key: "traced", width: "64px", on: prefs.columns.traced },
-    ] as const
-  ).filter((c) => c.on),
-);
-
-// The name column takes what the others leave; below this the list scrolls sideways instead.
-const tableMin = computed(() => columns.value.reduce((sum, c) => sum + (parseInt(c.width) || 220), 0));
+const cols = useColumns("uninstaller", () => [
+  { key: "name", label: t("col.name"), width: 0, sortable: true },
+  { key: "size", label: t("col.size"), width: 92, sortable: true, hidden: !prefs.columns.size },
+  { key: "date", label: t("col.date"), width: 124, sortable: true, hidden: !prefs.columns.date },
+  { key: "publisher", label: t("col.publisher"), width: 190, sortable: true, hidden: !prefs.columns.publisher },
+  { key: "version", label: t("col.version"), width: 130, sortable: true, hidden: !prefs.columns.version },
+  { key: "traced", label: t("col.traced"), width: 64, hidden: !prefs.columns.traced },
+]);
+const span = computed(() => cols.columns.length + (cols.filler ? 1 : 0));
 
 // Only the rows in view (plus a margin) are in the DOM, so a machine with thousands of
 // programs scrolls like one with fifty and only asks for the icons it shows.
@@ -95,7 +90,7 @@ function select(id: string, e: { ctrlKey: boolean; shiftKey: boolean }) {
 
 function openContext(row: Row, e: MouseEvent) {
   if (!selected.has(row.app.id)) select(row.app.id, { ctrlKey: false, shiftKey: false });
-  context.value = { x: Math.min(e.clientX, innerWidth - 260), y: Math.min(e.clientY, innerHeight - 320) };
+  showMenu(e, actionItems.value);
 }
 
 function onListKey(e: KeyboardEvent) {
@@ -122,33 +117,16 @@ const categoryName = computed(() => {
   return category.value === "recent" ? t(key, "").replace(/\s*[(（].*$/, "") : t(key);
 });
 
-const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
+const hasIcon = (a: App) => appIcon(a) !== "" && !brokenIcons.value.has(a.id);
 </script>
 
 <template>
-  <div class="body" @click="context = null">
+  <div class="body">
     <section ref="listEl" class="list" tabindex="0" @keydown="onListKey" @scroll.passive="scrollTop = ($event.target as HTMLElement).scrollTop">
-      <table role="grid" aria-multiselectable="true" :aria-rowcount="rows.length" :style="{ '--row-h': `${rowH}px`, minWidth: `${tableMin}px` }">
-        <colgroup>
-          <col v-for="c in columns" :key="c.key" :style="{ width: c.width }" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th
-              v-for="c in columns"
-              :key="c.key"
-              scope="col"
-              :aria-sort="prefs.sort.key === c.key ? (prefs.sort.desc ? 'descending' : 'ascending') : undefined"
-            >
-              <button type="button" @click="sortBy(c.key)">
-                {{ t(`col.${c.key}`) }}
-                <span v-if="prefs.sort.key === c.key" class="sort" :class="{ desc: prefs.sort.desc }" aria-hidden="true">↑</span>
-              </button>
-            </th>
-          </tr>
-        </thead>
+      <table role="grid" aria-multiselectable="true" :aria-rowcount="rows.length" :style="{ '--row-h': `${rowH}px`, minWidth: `${cols.minWidth}px` }">
+        <TableHead :cols="cols" :sort="prefs.sort" @sort="sortBy" />
         <tbody>
-          <tr v-if="first" class="spacer" aria-hidden="true" :style="{ height: `${first * rowH}px` }"><td :colspan="columns.length"></td></tr>
+          <tr v-if="first" class="spacer" aria-hidden="true" :style="{ height: `${first * rowH}px` }"><td :colspan="span"></td></tr>
           <tr
             v-for="row in visible"
             :key="row.app.id"
@@ -156,9 +134,9 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
             :class="{ recent: prefs.highlightRecent && category !== 'recent' && isRecent(row.app) }"
             @click="select(row.app.id, $event)"
             @dblclick="start('uninstall')"
-            @contextmenu.prevent="openContext(row, $event)"
+            @contextmenu.prevent.stop="openContext(row, $event)"
           >
-            <td v-for="c in columns" :key="c.key" :class="`col-${c.key}`">
+            <td v-for="c in cols.columns" :key="c.key" :class="`col-${c.key}`">
               <div v-if="c.key === 'name'" class="name-cell" :style="{ paddingLeft: `${row.depth * 24}px` }">
                 <button
                   v-if="row.kids && prefs.updates !== 'always'"
@@ -171,7 +149,7 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
                 >
                   ›
                 </button>
-                <img v-if="hasIcon(row.app)" class="app-icon" :src="iconUrl(row.app.icon)" alt="" @error="brokenIcons.add(row.app.id)" />
+                <img v-if="hasIcon(row.app)" class="app-icon" :src="appIcon(row.app)" alt="" @error="brokenIcons.add(row.app.id)" />
                 <span v-else class="app-icon placeholder" aria-hidden="true"></span>
                 <span class="text" :title="row.app.name">
                   {{ nameParts(row.app.name)[0] }}<mark>{{ nameParts(row.app.name)[1] }}</mark
@@ -186,9 +164,10 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
               <template v-else-if="c.key === 'version'">{{ row.app.version }}</template>
               <span v-else-if="c.key === 'traced' && row.app.traced" class="traced-mark" role="img" :aria-label="t('col.traced')"></span>
             </td>
+            <td v-if="cols.filler"></td>
           </tr>
           <tr v-if="last < rows.length" class="spacer" aria-hidden="true" :style="{ height: `${(rows.length - last) * rowH}px` }">
-            <td :colspan="columns.length"></td>
+            <td :colspan="span"></td>
           </tr>
         </tbody>
       </table>
@@ -204,7 +183,7 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
      <div class="panel-inner">
       <template v-if="current">
         <div class="panel-head">
-          <img v-if="hasIcon(current)" class="app-icon" :src="iconUrl(current.icon)" alt="" />
+          <img v-if="hasIcon(current)" class="app-icon" :src="appIcon(current)" alt="" />
           <span v-else class="app-icon placeholder" aria-hidden="true"></span>
           <h2>{{ current.name }}</h2>
         </div>
@@ -258,7 +237,5 @@ const hasIcon = (a: App) => a.icon !== "" && !brokenIcons.value.has(a.id);
       <p v-else class="empty">{{ t("panel.none") }}</p>
      </div>
     </aside>
-
-    <MenuList v-if="context" class="context" :style="{ left: `${context.x}px`, top: `${context.y}px` }" :items="actionItems" @close="context = null" />
   </div>
 </template>

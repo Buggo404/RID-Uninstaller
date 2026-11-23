@@ -3,18 +3,30 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { report } from "./actions";
 import { type StartupItem, api, iconUrl } from "./api";
+import { useColumns } from "./columns";
 import { t } from "./i18n";
 import { prefs } from "./prefs";
 import RSelect from "./RSelect.vue";
 import { filter, refreshStartup, startup, startupGroupOf } from "./store";
-import { confirmBox } from "./ui";
+import TableHead from "./TableHead.vue";
+import { confirmBox, showMenu } from "./ui";
 
 const selectedKey = ref<string | null>(null);
 const brokenIcons = ref(new Set<string>());
 const addDialog = ref<HTMLDialogElement>();
 const form = reactive({ to: "hkcu_run", name: "", exe: "", args: "", highest: false });
 
+const cols = useColumns("startup", () => [
+  { key: "name", label: t("col.name"), width: 0 },
+  { key: "status", label: t("st.colStatus"), width: 110 },
+  { key: "source", label: t("st.colSource"), width: 190 },
+  { key: "company", label: t("st.colCompany"), width: 200 },
+]);
+
 const keyOf = (i: StartupItem) => `${i.source}|${i.name}`;
+const hasIcon = (i: StartupItem) => i.exe !== "" && !brokenIcons.value.has(keyOf(i));
+/** Store tasks carry their app's logo in `exe`; only a real program has a folder to open. */
+const folderOf = (i: StartupItem) => (i.source === "store_app" ? "" : i.exe.replace(/\\[^\\]*$/, ""));
 
 const rows = computed(() => {
   const q = filter.value.trim().toLowerCase();
@@ -52,6 +64,17 @@ const remove = (i: StartupItem) =>
     const question = t(i.source === "task" ? "st.confirmDeleteTask" : "st.confirmDelete", i.title);
     if (await confirmBox(question)) await api.startupDelete(i.source, i.name);
   });
+
+function openContext(i: StartupItem, e: MouseEvent) {
+  selectedKey.value = keyOf(i);
+  showMenu(e, [
+    { label: t(i.status === "disabled" ? "st.enable" : "st.disable"), key: "Space", disabled: !i.can_disable, run: () => toggle(i) },
+    { label: t("st.delete"), key: "Shift+Del", disabled: i.source === "store_app", run: () => remove(i) },
+    { sep: true },
+    { label: t("st.openLocation"), disabled: !folderOf(i), run: () => api.openFolder(folderOf(i)).catch(report) },
+    { label: t("st.copyCommand"), disabled: !i.command, run: () => navigator.clipboard.writeText(i.command).catch(report) },
+  ]);
+}
 
 async function browse() {
   const picked = await open({ multiple: false, filters: [{ name: t("st.exeFilter"), extensions: ["exe", "bat", "cmd"] }] });
@@ -98,25 +121,18 @@ onMounted(reload);
 <template>
   <div class="body">
     <section class="list" tabindex="0" @keydown="onKey">
-      <table role="grid" style="--row-h: 40px">
-        <colgroup>
-          <col />
-          <col style="width: 110px" />
-          <col style="width: 190px" />
-          <col style="width: 200px" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th scope="col"><button type="button">{{ t("col.name") }}</button></th>
-            <th scope="col"><button type="button">{{ t("st.colStatus") }}</button></th>
-            <th scope="col"><button type="button">{{ t("st.colSource") }}</button></th>
-            <th scope="col"><button type="button">{{ t("st.colCompany") }}</button></th>
-          </tr>
-        </thead>
+      <table role="grid" :style="{ '--row-h': `${prefs.compact ? 30 : 40}px`, minWidth: `${cols.minWidth}px` }">
+        <TableHead :cols="cols" />
         <tbody>
-          <tr v-for="i in rows" :key="keyOf(i)" :aria-selected="keyOf(i) === selectedKey" @click="selectedKey = keyOf(i)">
-            <td>
-              <div class="name-cell">
+          <tr
+            v-for="i in rows"
+            :key="keyOf(i)"
+            :aria-selected="keyOf(i) === selectedKey"
+            @click="selectedKey = keyOf(i)"
+            @contextmenu.prevent.stop="openContext(i, $event)"
+          >
+            <td v-for="c in cols.columns" :key="c.key" :class="`col-${c.key}`">
+              <div v-if="c.key === 'name'" class="name-cell">
                 <input
                   type="checkbox"
                   :checked="i.status !== 'disabled'"
@@ -125,16 +141,17 @@ onMounted(reload);
                   @click.stop
                   @change="toggle(i)"
                 />
-                <img v-if="i.exe && !brokenIcons.has(keyOf(i))" class="app-icon" :src="iconUrl(i.exe)" alt="" @error="brokenIcons.add(keyOf(i))" />
+                <img v-if="hasIcon(i)" class="app-icon" :src="iconUrl(i.exe)" alt="" @error="brokenIcons.add(keyOf(i))" />
                 <span v-else class="app-icon placeholder" aria-hidden="true"></span>
                 <span class="text" :title="i.title">
                   {{ i.title }} <span v-if="prefs.mark32 && i.is_32bit" class="bits">{{ t("list.bit32") }}</span>
                 </span>
               </div>
+              <template v-else-if="c.key === 'status'"><span class="status-dot" :class="i.status"></span>{{ t(`st.${i.status}`) }}</template>
+              <template v-else-if="c.key === 'source'">{{ t(`st.${i.source}`) }}</template>
+              <template v-else>{{ i.company }}</template>
             </td>
-            <td><span class="status-dot" :class="i.status"></span>{{ t(`st.${i.status}`) }}</td>
-            <td class="col-size">{{ t(`st.${i.source}`) }}</td>
-            <td class="col-size">{{ i.company }}</td>
+            <td v-if="cols.filler"></td>
           </tr>
         </tbody>
       </table>
@@ -142,26 +159,35 @@ onMounted(reload);
       <p v-else-if="!rows.length" class="empty">{{ t("st.empty") }}</p>
     </section>
 
-    <aside class="panel" aria-live="polite">
-      <template v-if="current">
-        <div class="panel-head">
-          <h2>{{ current.title }}</h2>
-        </div>
-        <div class="panel-actions">
-          <button v-if="current.can_disable" type="button" class="btn" @click="toggle(current)">
-            {{ t(current.status === "disabled" ? "st.enable" : "st.disable") }}
-          </button>
-          <button v-if="current.source !== 'store_app'" type="button" class="btn danger" @click="remove(current)">{{ t("st.delete") }}</button>
-        </div>
-        <dl class="props">
-          <dt>{{ t("st.colStatus") }}</dt>
-          <dd>{{ t(`st.${current.status}`) }}</dd>
-          <dt>{{ t("st.colSource") }}</dt>
-          <dd>{{ t(`st.${current.source}`) }}</dd>
-        </dl>
-        <p v-if="current.command" class="command">{{ current.command }}</p>
-      </template>
-      <p v-else class="empty">{{ t("panel.none") }}</p>
+    <aside class="panel" :class="{ closed: !prefs.details }" :inert="!prefs.details" aria-live="polite">
+      <div class="panel-inner">
+        <template v-if="current">
+          <div class="panel-head">
+            <img v-if="hasIcon(current)" class="app-icon" :src="iconUrl(current.exe)" alt="" />
+            <span v-else class="app-icon placeholder" aria-hidden="true"></span>
+            <h2>{{ current.title }}</h2>
+          </div>
+          <div class="panel-actions">
+            <button v-if="current.can_disable" type="button" class="btn" @click="toggle(current)">
+              {{ t(current.status === "disabled" ? "st.enable" : "st.disable") }}
+            </button>
+            <button v-if="current.source !== 'store_app'" type="button" class="btn danger" @click="remove(current)">{{ t("st.delete") }}</button>
+          </div>
+          <dl class="props">
+            <dt>{{ t("st.colStatus") }}</dt>
+            <dd>{{ t(`st.${current.status}`) }}</dd>
+            <dt>{{ t("st.colSource") }}</dt>
+            <dd>{{ t(`st.${current.source}`) }}</dd>
+            <template v-if="current.company">
+              <dt>{{ t("st.colCompany") }}</dt>
+              <dd>{{ current.company }}</dd>
+            </template>
+          </dl>
+          <button v-if="folderOf(current)" type="button" class="link" @click="api.openFolder(folderOf(current)).catch(report)">{{ folderOf(current) }}</button>
+          <p v-if="current.command" class="command">{{ current.command }}</p>
+        </template>
+        <p v-else class="empty">{{ t("panel.none") }}</p>
+      </div>
     </aside>
 
     <dialog ref="addDialog" class="dialog" aria-labelledby="add-title" @close="startup.adding = false">

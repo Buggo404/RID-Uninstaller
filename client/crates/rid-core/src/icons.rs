@@ -9,22 +9,84 @@ use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, I
 
 const SIZE: i32 = 48;
 
-/// `source` is a registry `DisplayIcon` value (`path` or `path,index`) or an image file.
-pub fn png(source: &str) -> Option<Vec<u8>> {
-    let (path, index) = match source.rsplit_once(',') {
-        Some((p, i)) if i.trim().parse::<i32>().is_ok() => (p, i.trim().parse().unwrap_or(0)),
-        _ => (source, 0),
-    };
-    let path = path.trim().trim_matches('"');
-    if Path::new(path).extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
-        return std::fs::read(path).ok();
+/// `sources` are tried in order, separated by `|`. Each is a registry `DisplayIcon` value
+/// (`path` or `path,index`), an image file, or a program's folder.
+pub fn png(sources: &str) -> Option<Vec<u8>> {
+    let sources: Vec<(&str, i32)> = sources
+        .split('|')
+        .map(|source| match source.rsplit_once(',') {
+            Some((p, i)) if i.trim().parse::<i32>().is_ok() => (p, i.trim().parse().unwrap_or(0)),
+            _ => (source, 0),
+        })
+        .map(|(path, index)| (path.trim().trim_matches('"'), index))
+        .filter(|(path, _)| !path.is_empty())
+        .collect();
+    sources.iter().find_map(|&(path, index)| own(Path::new(path), index)).or_else(|| {
+        // A program file with no icon of its own gets the one Explorer shows for such files.
+        let program = sources.iter().any(|(p, _)| has_extension(Path::new(p), "exe") && Path::new(p).is_file());
+        let shell32 = std::env::var("SystemRoot").ok()?;
+        program.then(|| extract_rgba(&format!(r"{shell32}\System32\shell32.dll"), 2)).flatten().and_then(|rgba| encode(&rgba))
+    })
+}
+
+fn has_extension(path: &Path, extension: &str) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case(extension))
+}
+
+fn own(path: &Path, index: i32) -> Option<Vec<u8>> {
+    if has_extension(path, "png") {
+        return std::fs::read(path).ok().or_else(|| std::fs::read(scaled_variant(path)?).ok());
     }
-    let rgba = extract_rgba(path, index)?;
+    if path.is_dir() {
+        return main_programs(path).iter().find_map(|exe| encode(&extract_rgba(&exe.to_string_lossy(), 0)?));
+    }
+    encode(&extract_rgba(&path.to_string_lossy(), index)?)
+}
+
+/// Store apps name `Logo.png` and ship `Logo.scale-200.png`, `Logo.targetsize-48.png` and the like.
+fn scaled_variant(path: &Path) -> Option<std::path::PathBuf> {
+    let prefix = format!("{}.", path.file_stem()?.to_string_lossy().to_lowercase());
+    std::fs::read_dir(path.parent()?)
+        .ok()?
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            name.starts_with(&prefix) && name.ends_with(".png") && !name.contains("contrast")
+        })
+        // The largest file is the most detailed rendering.
+        .max_by_key(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
+        .map(|e| e.path())
+}
+
+/// The programs directly in `dir`, largest first, without the installer's own helpers:
+/// the best guess at what the program's icon is when nothing names one.
+fn main_programs(dir: &Path) -> Vec<std::path::PathBuf> {
+    // Entries that claim the Windows folder as their own would pick up some system tool's icon.
+    let windows = std::env::var("SystemRoot").unwrap_or_default().to_lowercase();
+    if windows.is_empty() || dir.to_string_lossy().to_lowercase().starts_with(&windows) {
+        return Vec::new();
+    }
+    let mut programs: Vec<(u64, std::path::PathBuf)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| has_extension(&e.path(), "exe"))
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            !["unins", "setup", "update", "crash", "helper"].iter().any(|helper| name.contains(helper))
+        })
+        .filter_map(|e| Some((e.metadata().ok()?.len(), e.path())))
+        .collect();
+    programs.sort_by_key(|(size, _)| std::cmp::Reverse(*size));
+    programs.into_iter().take(4).map(|(_, path)| path).collect()
+}
+
+fn encode(rgba: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     let mut enc = png::Encoder::new(&mut out, SIZE as u32, SIZE as u32);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
-    enc.write_header().ok()?.write_image_data(&rgba).ok()?;
+    enc.write_header().ok()?.write_image_data(rgba).ok()?;
     Some(out)
 }
 
@@ -131,5 +193,23 @@ mod tests {
         assert_eq!(pixel(4, 24)[3], 0, "masked-out half is transparent, not a black square");
         assert_eq!(pixel(44, 24), [255, 0, 0, 255], "visible half keeps its colour");
         assert!(png(r"C:\no\such\icon.exe").is_none());
+    }
+
+    #[test]
+    fn later_sources_and_scaled_images_stand_in_for_a_missing_icon() {
+        let dir = std::env::temp_dir().join(format!("rid-icon-sources-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Logo.scale-100.png"), b"small").unwrap();
+        std::fs::write(dir.join("Logo.scale-200.png"), b"the larger one").unwrap();
+        std::fs::write(dir.join("Logo.contrast-black.png"), b"larger still, but for high contrast").unwrap();
+        let logo = dir.join("Logo.png").to_string_lossy().into_owned();
+        assert_eq!(png(&logo).as_deref(), Some(&b"the larger one"[..]));
+        assert_eq!(png(&format!(r"NoSuchTool.exe|C:\no\such.ico,3|{logo}")).as_deref(), Some(&b"the larger one"[..]));
+
+        // A folder stands for its main program; one without programs yields nothing.
+        assert!(png(&dir.to_string_lossy()).is_none());
+        let system32 = format!(r"{}\System32", std::env::var("SystemRoot").unwrap());
+        assert!(png(&system32).is_none(), "the Windows folder is nobody's program folder");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
