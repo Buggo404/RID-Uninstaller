@@ -10,6 +10,7 @@ use rid_core::{ops, uninstall};
 const USAGE: &str = "usage:
   rid list [--json | --csv]        installed programs
   rid scan <name> [--json]         what removing <name> would delete (changes nothing)
+  rid scan <name> <server> --rules   the same, also asking the rules server at <server>
   rid uninstall <name> [options]   run the program's uninstaller, then remove leftovers
   rid force-remove <name> [options]  remove files and registry items without the uninstaller
   rid remove-entry <name> [options]  remove only the entry from the installed-programs list
@@ -35,7 +36,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (flags, words): (Vec<&str>, Vec<&str>) = args.iter().map(String::as_str).partition(|a| a.starts_with("--"));
     let has = |flag: &str| flags.contains(&flag);
-    let known = ["--json", "--csv", "--quiet", "--no-clean", "--all", "--dry-run", "--yes", "--msi"];
+    let known = ["--json", "--csv", "--quiet", "--no-clean", "--all", "--dry-run", "--yes", "--msi", "--rules"];
     if let Some(bad) = flags.iter().find(|f| !known.contains(f)) {
         eprintln!("unknown option {bad}\n\n{USAGE}");
         return ExitCode::from(2);
@@ -43,7 +44,8 @@ fn main() -> ExitCode {
     let opts = Options { all: has("--all"), dry_run: has("--dry-run"), yes: has("--yes") };
     let result = match words[..] {
         ["list"] => list(has("--json"), has("--csv")),
-        ["scan", name] => scan_one(name, has("--json")),
+        ["scan", name] => scan_one(name, has("--json"), None),
+        ["scan", name, server] if has("--rules") => scan_one(name, has("--json"), Some(server)),
         ["uninstall", name] => uninstall_one(name, has("--quiet"), !has("--no-clean"), &opts),
         ["force-remove", name] => force_remove(name, &opts),
         ["remove-entry", name] => remove_entry(name, &opts),
@@ -162,10 +164,20 @@ fn print_leftovers(found: &[Leftover], all: bool) {
     }
 }
 
-fn scan_one(name: &str, json: bool) -> Result<(), Failure> {
+fn scan_one(name: &str, json: bool, rules_server: Option<&str>) -> Result<(), Failure> {
     let inv = inventory::list();
     let app = find(&inv.apps, name)?;
-    let found = scan::scan(app, &inv.apps, &Roots::from_system());
+    let roots = Roots::from_system();
+    let mut found = scan::scan(app, &inv.apps, &roots);
+    if let Some(server) = rules_server {
+        let others = scan::other_program_dirs(&[&app.id], &inv.apps);
+        let nominated = rid_core::rules::leftovers(&rid_core::rules::fetch(server, app), &roots, &others);
+        for leftover in nominated {
+            if !found.iter().any(|f| scan::covered_by(&leftover.target, &f.target)) {
+                found.push(leftover);
+            }
+        }
+    }
     if json {
         print_json(&found);
     } else {

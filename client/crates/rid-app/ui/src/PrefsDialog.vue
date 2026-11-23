@@ -71,6 +71,8 @@ onMounted(() => {
       <RSelect v-model="prefs.wizard" :options="wizard" />
       <span>{{ t("prefs.quarantine") }}</span>
       <RSelect v-model="prefs.quarantine" :options="retention" />
+      <label for="prefs-rules">{{ t("prefs.rulesServer") }}</label>
+      <input id="prefs-rules" v-model="prefs.rulesServer" class="input" type="url" placeholder="https://" spellcheck="false" />
     </div>
 
     <form method="dialog" class="dialog-buttons">

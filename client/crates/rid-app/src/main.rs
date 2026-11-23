@@ -10,7 +10,7 @@ use rid_core::ops::{self, BatchInfo, Report};
 use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
-use rid_core::{driver, icons, paths, shell, startup, trace, traced, uninstall};
+use rid_core::{driver, icons, paths, rules, shell, startup, trace, traced, uninstall};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::Emitter;
@@ -284,7 +284,7 @@ struct Found {
 }
 
 #[tauri::command(async)]
-fn scan_leftovers(state: State, ids: Vec<String>) -> CmdResult<Vec<Found>> {
+fn scan_leftovers(state: State, ids: Vec<String>, rules_server: Option<String>) -> CmdResult<Vec<Found>> {
     let apps = known(&state, &ids)?;
     let installed = inventory::list().apps;
     let roots = Roots::from_system();
@@ -296,7 +296,13 @@ fn scan_leftovers(state: State, ids: Vec<String>) -> CmdResult<Vec<Found>> {
         // only adds what the recording does not already cover.
         let recorded = traced::load(&app.id).map(|r| scan::traced(&r.items, &roots, &others)).unwrap_or_default();
         let searched = if app.id.starts_with("TRACE:") { Vec::new() } else { scan::scan(app, &installed, &roots) };
-        for leftover in recorded.into_iter().chain(searched) {
+        // Package managers keep to their own folders; rules are for ordinary programs.
+        let ordinary = !["TRACE:", "SCOOP:", "CHOCO:"].iter().any(|p| app.id.starts_with(p));
+        let nominated = match rules_server.as_deref().filter(|s| ordinary && !s.is_empty()) {
+            Some(server) => rules::leftovers(&rules::fetch(server, app), &roots, &others),
+            None => Vec::new(),
+        };
+        for leftover in recorded.into_iter().chain(searched).chain(nominated) {
             // Two programs of one batch can point at the same item; it is listed once.
             if !found.iter().any(|f| scan::covered_by(&leftover.target, &f.leftover.target)) {
                 found.push(Found { app_id: app.id.clone(), leftover });
@@ -345,11 +351,15 @@ fn recorded_keys(ids: &[String]) -> Vec<String> {
         .collect()
 }
 
-fn remove(label: &str, ids: &[String], targets: &[Target]) -> CmdResult<Report> {
+fn remove(label: &str, ids: &[String], apps: &[App], targets: &[Target]) -> CmdResult<Report> {
     let installed = inventory::list().apps;
     let removing: Vec<&str> = ids.iter().map(String::as_str).collect();
     let others = scan::other_program_dirs(&removing, &installed);
-    let report = ops::remove(label, targets, &Roots::from_system(), &others, &recorded_keys(ids)).map_err(err)?;
+    // Keys this program's recording or its rules name get the wider key check; from the cache
+    // only, so that what may be removed is exactly what the scan could have offered.
+    let mut keys = recorded_keys(ids);
+    keys.extend(apps.iter().flat_map(|a| rules::keys(&rules::cached(a))));
+    let report = ops::remove(label, targets, &Roots::from_system(), &others, &keys).map_err(err)?;
     // A recording describes an installation that is now gone. Checked after the removal,
     // which is what takes the program's entry off the list.
     let still_installed = inventory::list().apps;
@@ -361,8 +371,8 @@ fn remove(label: &str, ids: &[String], targets: &[Target]) -> CmdResult<Report> 
 
 #[tauri::command(async)]
 fn remove_leftovers(state: State, label: String, ids: Vec<String>, targets: Vec<Target>) -> CmdResult<Report> {
-    known(&state, &ids)?;
-    remove(&label, &ids, &targets)
+    let apps = known(&state, &ids)?;
+    remove(&label, &ids, &apps, &targets)
 }
 
 /// Removes only the entries from the installed-programs list, nothing else.
@@ -373,7 +383,7 @@ fn remove_entries(state: State, label: String, ids: Vec<String>) -> CmdResult<Re
         .filter(|a| !a.reg_path.is_empty())
         .map(|a| Target::RegKey { key: a.reg_path.clone() })
         .collect();
-    remove(&label, &ids, &targets)
+    remove(&label, &ids, &[], &targets)
 }
 
 #[tauri::command(async)]

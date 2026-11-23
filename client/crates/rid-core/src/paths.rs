@@ -22,23 +22,32 @@ pub fn data_dir() -> PathBuf {
 /// Rid runs elevated and later acts on what it finds in its own folders (it restores files,
 /// imports registry exports, deletes traced items). If an unprivileged process could write
 /// there, it could have Rid do those things on its behalf.
-pub fn lock_down(dir: &Path) -> io::Result<()> {
+///
+/// `contents` also takes over everything already inside, for folders that hold only Rid's
+/// own records. It must stay off for the quarantine, whose files are the user's and have to
+/// come back from it with the owner and permissions they went in with.
+pub fn lock_down(dir: &Path, contents: bool) -> io::Result<()> {
     let icacls = PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into())).join("System32").join("icacls.exe");
-    // Well-known SIDs, so this works on every display language: Administrators, SYSTEM, Users.
-    let admins = "*S-1-5-32-544";
-    let steps: [&[&str]; 2] = [
-        &["/setowner", admins, "/T", "/C", "/Q"],
-        &["/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-545:(OI)(CI)RX", "/T", "/C", "/Q"],
-    ];
-    for args in steps {
-        let out = Command::new(&icacls).arg(dir).args(args).creation_flags(0x0800_0000).output()?;
-        if !out.status.success() {
-            return Err(io::Error::other(format!(
-                "could not restrict access to {} (administrator rights are required): {}",
-                dir.display(),
-                String::from_utf8_lossy(&out.stdout).trim()
-            )));
+    let run = |target: &std::ffi::OsStr, args: &[&str]| -> io::Result<()> {
+        let out = Command::new(&icacls).arg(target).args(args).creation_flags(0x0800_0000).output()?;
+        if out.status.success() {
+            return Ok(());
         }
+        Err(io::Error::other(format!(
+            "could not restrict access to {} (administrator rights are required): {}",
+            dir.display(),
+            String::from_utf8_lossy(&out.stdout).trim()
+        )))
+    };
+    // Well-known SIDs, so this works on every display language: Administrators, SYSTEM, Users.
+    run(dir.as_os_str(), &["/setowner", "*S-1-5-32-544", "/C", "/Q"])?;
+    run(dir.as_os_str(), &["/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-545:(OI)(CI)RX", "/C", "/Q"])?;
+    if contents && fs::read_dir(dir)?.next().is_some() {
+        // Whatever is inside (possibly planted before Rid first ran) becomes administrator-owned
+        // and takes its permissions from the folder alone.
+        let inside = dir.join("*");
+        run(inside.as_os_str(), &["/setowner", "*S-1-5-32-544", "/T", "/C", "/Q"])?;
+        run(inside.as_os_str(), &["/reset", "/T", "/C", "/Q"])?;
     }
     Ok(())
 }
@@ -57,7 +66,7 @@ pub fn secure_dir() -> io::Result<PathBuf> {
         let dir = PathBuf::from(std::env::var_os("ProgramData").ok_or("ProgramData is not set")?).join("Rid Uninstaller");
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         // Every start, not only on creation: the folder may have been planted before Rid first ran.
-        lock_down(&dir).map_err(|e| e.to_string())?;
+        lock_down(&dir, true).map_err(|e| e.to_string())?;
         Ok(dir)
     })
     .clone()

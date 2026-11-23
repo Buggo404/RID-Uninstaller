@@ -275,6 +275,8 @@ const en = {
   "win.close": "Close",
   "cat.packages": "Package managers",
   "col.source": "Source",
+  "ev.rule": "rules database",
+  "prefs.rulesServer": "Rules server (empty = off):",
 };
 
 const zh: Record<keyof typeof en, string> = {
@@ -551,6 +553,8 @@ const zh: Record<keyof typeof en, string> = {
   "win.close": "关闭",
   "cat.packages": "包管理器",
   "col.source": "来源",
+  "ev.rule": "规则库",
+  "prefs.rulesServer": "规则库服务器（留空则关闭）：",
 };
 
 export type MsgKey = keyof typeof en;

@@ -1,0 +1,32 @@
+# Set RID_DB_PASSWORD and RID_ADMIN_TOKEN (24+ characters) in the environment or in a .env file
+# next to this one, then: docker compose up -d --build
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rid
+      POSTGRES_DB: rid
+      POSTGRES_PASSWORD: ${RID_DB_PASSWORD:?set RID_DB_PASSWORD}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rid -d rid"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://rid:${RID_DB_PASSWORD}@db:5432/rid
+      ADMIN_TOKEN: ${RID_ADMIN_TOKEN:?set RID_ADMIN_TOKEN}
+    ports:
+      - "${RID_PORT:-8080}:8080"
+
+volumes:
+  db:

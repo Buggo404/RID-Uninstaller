@@ -8,6 +8,7 @@ pub mod names;
 pub mod ops;
 pub mod paths;
 pub mod procs;
+pub mod rules;
 pub mod safety;
 pub mod scan;
 pub mod shell;

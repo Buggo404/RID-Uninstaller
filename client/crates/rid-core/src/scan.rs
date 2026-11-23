@@ -44,6 +44,8 @@ pub enum Evidence {
     InstallerRecord,
     /// Recorded by the install tracer while the program was being installed.
     Traced,
+    /// Named by the rules server for this program.
+    Rule,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -80,7 +82,7 @@ fn measure(dir: &Path) -> (u64, u32) {
     })
 }
 
-fn leftover(target: Target, evidence: Evidence, certain: bool) -> Leftover {
+pub(crate) fn leftover(target: Target, evidence: Evidence, certain: bool) -> Leftover {
     let (bytes, documents) = match &target {
         Target::Dir { path } => measure(Path::new(path)),
         Target::File { path } => (fs::metadata(path).map(|m| m.len()).unwrap_or(0), u32::from(is_document(Path::new(path)))),
@@ -302,7 +304,7 @@ fn runs_from(command: &str, dir: &str) -> bool {
 
 use crate::msi::packed_product_code;
 
-fn open(hive: &str, path: &str) -> Option<RegKey> {
+pub(crate) fn open(hive: &str, path: &str) -> Option<RegKey> {
     let root = if hive == "HKLM" { HKEY_LOCAL_MACHINE } else { HKEY_CURRENT_USER };
     RegKey::predef(root).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY).ok()
 }

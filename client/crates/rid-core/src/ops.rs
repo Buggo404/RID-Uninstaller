@@ -90,12 +90,14 @@ fn batches_dir() -> io::Result<PathBuf> {
 fn payload_base(drive: &str) -> io::Result<PathBuf> {
     #[cfg(test)]
     if let Some(base) = tests::BASE.with(|b| b.borrow().clone()) {
+        fs::create_dir_all(base.join("payload"))?;
         return Ok(base.join("payload"));
     }
     let base = PathBuf::from(format!(r"{drive}\{QUARANTINE}"));
     fs::create_dir_all(&base)?;
-    // Drive roots let ordinary users write; what waits here is later moved back by an administrator.
-    paths::lock_down(&base)?;
+    // Drive roots let ordinary users write. Only the folder itself is locked: the files that
+    // wait inside are the user's and keep their own owner and permissions for the way back.
+    paths::lock_down(&base, false)?;
     Ok(base)
 }
 
@@ -190,6 +192,8 @@ struct Removal<'a> {
     traced_keys: &'a [String],
     items: Vec<Stored>,
     pending: Vec<String>,
+    /// Per-volume quarantine folders this removal created.
+    batch_dirs: Vec<PathBuf>,
 }
 
 impl Removal<'_> {
@@ -203,8 +207,13 @@ impl Removal<'_> {
         }
         let text = path.to_string_lossy().into_owned();
         // Same volume as the original, so the move is a rename and needs no extra space.
-        let stored = payload_base(&text[..2])?
-            .join(&self.id)
+        let batch = payload_base(&text[..2])?.join(&self.id);
+        if !self.batch_dirs.contains(&batch) {
+            // Must be new: a folder someone else put there first could be theirs to write to.
+            fs::create_dir(&batch)?;
+            self.batch_dirs.push(batch.clone());
+        }
+        let stored = batch
             .join(self.items.len().to_string())
             .join(path.file_name().unwrap_or_default());
         fs::create_dir_all(stored.parent().unwrap_or(Path::new("")))?;
@@ -286,7 +295,7 @@ pub fn remove(label: &str, targets: &[Target], roots: &Roots, other_programs: &[
     let dir = batches_dir()?.join(&id);
     fs::create_dir_all(&dir)?;
     let mut removal =
-        Removal { id: id.clone(), dir: dir.clone(), roots, others: other_programs, traced_keys, items: Vec::new(), pending: Vec::new() };
+        Removal { id: id.clone(), dir: dir.clone(), roots, others: other_programs, traced_keys, items: Vec::new(), pending: Vec::new(), batch_dirs: Vec::new() };
 
     let mut log = Vec::new();
     for target in targets {

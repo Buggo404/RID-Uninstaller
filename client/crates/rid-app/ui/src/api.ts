@@ -47,7 +47,7 @@ export const api = {
     invoke<RunResult>("uninstall_run", { id, modify, quiet }),
   quietSupport: (ids: string[]) => invoke<boolean[]>("quiet_support", { ids }),
   uninstallCancel: () => invoke<void>("uninstall_cancel"),
-  scanLeftovers: (ids: string[]) => invoke<Leftover[]>("scan_leftovers", { ids }),
+  scanLeftovers: (ids: string[], rulesServer: string) => invoke<Leftover[]>("scan_leftovers", { ids, rulesServer }),
   processes: (ids: string[]) => invoke<Proc[]>("processes", { ids }),
   killProcesses: (ids: string[], pids: number[]) => invoke<string[]>("kill_processes", { ids, pids }),
   removeLeftovers: (label: string, ids: string[], targets: Target[]) =>
@@ -153,7 +153,8 @@ export type Evidence =
   | "uninstall_entry"
   | "runs_from_folder"
   | "installer_record"
-  | "traced";
+  | "traced"
+  | "rule";
 
 export interface Leftover {
   app_id: string;
