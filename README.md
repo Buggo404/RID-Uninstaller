@@ -57,7 +57,7 @@ RID 的做法是**每一项残留都要说得出理由，每一次删除都能�
 | --- | --- |
 | 卸载、残留扫描、隔离区、启动项、右键菜单、命令行 | 可用 |
 | 规则库与更新服务端、管理后台 | 可用 |
-| 安装追踪（记录安装程序创建的每一项，卸载时照单清理） | 代码已完成，**内核驱动尚未取得微软签名**，在普通系统上暂时无法加载 |
+| 安装追踪（记录安装程序创建的每一项，卸载时照单清理） | 可用；基于 Windows 自带的事件追踪（ETW），不需要驱动 |
 | AI 分析 | 可用；需要在服务端后台配置模型（兼容 OpenAI 与 Anthropic 接口），提示词可按功能分别修改 |
 
 ## 构建
@@ -66,7 +66,6 @@ RID 的做法是**每一项残留都要说得出理由，每一次删除都能�
 
 - Rust（stable，支持 2024 edition）
 - Node.js 24 与 pnpm 10
-- 只有编译驱动时才需要 Windows Driver Kit 和 LLVM
 
 ```powershell
 cd client
@@ -76,8 +75,6 @@ cd client
 脚本会依次运行测试、构建命令行和程序本体，产物是安装包 `client\target\release\bundle\nsis\Rid Uninstaller_<版本>_x64-setup.exe`。
 
 - 程序默认连接 `https://rid.bitheart.top`；编译时设置环境变量 `RID_SERVER` 可以指向别的服务器（例如本机的测试服务）。
-- 加上 `-Driver <已由微软签名的 RidMonitor.sys>` 会把驱动一并打进程序。
-- 加上 `-BuildDriver` 会同时编译驱动。
 
 ### 隐私
 
@@ -112,8 +109,6 @@ client/
   crates/rid-core     枚举、扫描、安全护栏、删除与还原（不依赖界面）
   crates/rid-app      桌面程序（Tauri + Vue 3）
   crates/rid-cli      命令行
-  crates/rid-proto    与驱动共用的协议
-  driver/rid-monitor  安装追踪用的文件系统过滤驱动（Rust，no_std）
 server/               规则库、更新、管理后台
 ```
 
@@ -137,4 +132,4 @@ RID Uninstaller removes Windows programs completely: it runs the program's own u
 
 It also manages startup entries, lists Store apps and packages from Steam, Scoop and Chocolatey, and ships a command-line tool. Written in Rust with a Tauri interface; English and Simplified Chinese.
 
-Status: early (0.1.0), no releases yet — build it with `client\scripts\build.ps1`. Install tracing depends on a kernel driver that is not yet signed by Microsoft.
+Status: early (0.1.0), no releases yet — build it with `client\scripts\build.ps1`. Install tracing uses Windows' own event tracing (ETW); there is no driver.

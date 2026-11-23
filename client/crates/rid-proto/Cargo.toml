@@ -1,4 +1,0 @@
-[package]
-name = "rid-proto"
-version.workspace = true
-edition.workspace = true

@@ -63,7 +63,7 @@ fn reduce_with(events: &[Event], path_exists: impl Fn(&str) -> bool, key_there: 
                 }
             }
             // An installer typically writes a temporary file and renames it into place.
-            Change::Renamed { from, to, .. } => {
+            Change::Renamed { from, to } => {
                 let (Some(from_n), Some(to_n)) = (norm(Path::new(from)), norm(Path::new(to))) else { continue };
                 let moved: Vec<String> = paths.keys().filter(|p| within(p, &from_n)).cloned().collect();
                 for old in moved {
@@ -72,15 +72,14 @@ fn reduce_with(events: &[Event], path_exists: impl Fn(&str) -> bool, key_there: 
                     paths.insert(format!("{to_n}{}", &old[from_n.len()..]), (format!("{to}{tail}"), dir));
                 }
             }
-            Change::Deleted { path, .. } => {
+            Change::Deleted { path } => {
                 if let Some(n) = norm(Path::new(path)) {
                     paths.retain(|p, _| !within(p, &n));
                 }
             }
-            Change::KeyCreated { key, unsure: false } => {
+            Change::KeyCreated { key } => {
                 keys.insert(key.to_lowercase(), key.clone());
             }
-            Change::KeyCreated { .. } => {}
             Change::KeyDeleted { key } => {
                 keys.retain(|_, k| !key_within(k, key));
                 values.retain(|_, (k, _)| !key_within(k, key));
@@ -188,7 +187,7 @@ mod tests {
         event(Change::Created { path: path.into(), dir })
     }
     fn key(k: &str) -> Event {
-        event(Change::KeyCreated { key: k.into(), unsure: false })
+        event(Change::KeyCreated { key: k.into() })
     }
     fn all(events: &[Event]) -> Vec<Target> {
         reduce_with(events, |_| true, |_| true, |_, _| true)
@@ -216,14 +215,14 @@ mod tests {
     fn temporary_files_and_renames_are_followed() {
         let got = all(&[
             created(r"C:\Users\me\AppData\Local\Temp\setup.tmp", false),
-            event(Change::Deleted { path: r"C:\Users\me\AppData\Local\Temp\setup.tmp".into(), dir: false }),
+            event(Change::Deleted { path: r"C:\Users\me\AppData\Local\Temp\setup.tmp".into() }),
             created(r"C:\Windows\System32\drv.sys.new", false),
-            event(Change::Renamed { from: r"C:\Windows\System32\drv.sys.new".into(), to: r"C:\Windows\System32\drv.sys".into(), dir: false }),
+            event(Change::Renamed { from: r"C:\Windows\System32\drv.sys.new".into(), to: r"C:\Windows\System32\drv.sys".into() }),
             created(r"C:\Stage", true),
             created(r"C:\Stage\a.dll", false),
-            event(Change::Renamed { from: r"C:\Stage".into(), to: r"C:\Apps\Final".into(), dir: true }),
+            event(Change::Renamed { from: r"C:\Stage".into(), to: r"C:\Apps\Final".into() }),
             // A file that existed before and is merely renamed is not the installation's.
-            event(Change::Renamed { from: r"C:\Existing\old.ini".into(), to: r"C:\Existing\old.bak".into(), dir: false }),
+            event(Change::Renamed { from: r"C:\Existing\old.ini".into(), to: r"C:\Existing\old.bak".into() }),
         ]);
         assert_eq!(got, [dir(r"C:\Apps\Final"), file(r"C:\Windows\System32\drv.sys")]);
     }
@@ -245,8 +244,6 @@ mod tests {
             key(r"HKLM\SOFTWARE\Classes\CLSID\{A}"),
             key(r"HKLM\SOFTWARE\Temp"),
             event(Change::KeyDeleted { key: r"HKLM\SOFTWARE\Temp".into() }),
-            // An opened key the driver could not classify is never treated as created.
-            event(Change::KeyCreated { key: r"HKLM\SOFTWARE\Microsoft".into(), unsure: true }),
             event(Change::ValueSet { key: run.into(), name: "App".into() }),
             // Written into a key that existed before: may have replaced something, so it is left alone.
             event(Change::ValueSet { key: r"HKLM\SOFTWARE\Classes\.txt".into(), name: "".into() }),

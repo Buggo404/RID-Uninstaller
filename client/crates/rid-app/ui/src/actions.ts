@@ -9,7 +9,7 @@ export const canUninstall = (a: App) => a.category === "store" || a.uninstall_st
 
 /** Backend failures are shown, never swallowed: a jump that silently does nothing looks like a hang. */
 export function report(e: unknown) {
-  notify(String(e) === "driver-unsigned" ? t("tr.unsigned") : String(e));
+  notify(String(e));
 }
 
 export const jump = {

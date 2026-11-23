@@ -11,9 +11,6 @@
 # The installer stage also writes <installer>.sig with the updater key. Clients only accept an
 # update whose .sig matches the installer byte for byte, so it is made after the code signature;
 # its contents go into the release on the server's admin page.
-#
-# This does NOT make the driver loadable on ordinary machines: kernel drivers must be signed
-# by Microsoft through the Hardware Dev Center. See scripts\driver-package.ps1.
 param(
     [Parameter(Mandatory)][string]$Thumbprint,
     [ValidateSet('binaries', 'installer')][string]$Stage = 'binaries',
@@ -28,7 +25,7 @@ $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\si
 if (-not $signtool) { throw 'signtool.exe not found; install the Windows SDK' }
 
 $files = if ($Stage -eq 'binaries') {
-    "$root\target\release\rid-app.exe", "$root\target\release\rid.exe", "$root\driver\rid-monitor\target\release\rid_monitor.dll"
+    "$root\target\release\rid-app.exe", "$root\target\release\rid.exe"
 } else {
     (Get-ChildItem "$root\target\release\bundle\nsis\*.exe").FullName
 }

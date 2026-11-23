@@ -40,8 +40,6 @@ jobs:
         working-directory: client
         run: cargo build --release -p rid-cli
 
-      # The tracing driver is not built here: it needs the Windows Driver Kit and, to be of any
-      # use, Microsoft's signature. Once there is a signed RidMonitor.sys, pass it as RID_DRIVER.
       - name: Installer
         working-directory: client/crates/rid-app
         env:

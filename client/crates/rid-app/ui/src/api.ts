@@ -72,9 +72,6 @@ export const api = {
   startupDelete: (source: StartupSource, name: string) => invoke<void>("startup_delete", { source, name }),
   startupAdd: (to: string, name: string, exe: string, args: string) =>
     invoke<void>("startup_add", { to, name, exe, arguments: args }),
-  driverStatus: () => invoke<"ready" | "installed" | "not_installed">("driver_status"),
-  driverInstall: () => invoke<void>("driver_install"),
-  driverRemove: () => invoke<void>("driver_remove"),
   traceRun: (path: string, args: string) => invoke<TraceResult>("trace_run", { path, arguments: args }),
   traceSave: (appId: string | null, customName: string | null, dependents: string[], append: boolean) =>
     invoke<void>("trace_save", { appId, customName, dependents, append }),
@@ -121,8 +118,9 @@ export interface TraceRecord {
 }
 
 export type TraceEvent = { pid: number } & (
-  | { kind: "created" | "deleted"; path: string; dir: boolean }
-  | { kind: "renamed"; from: string; to: string; dir: boolean }
+  | { kind: "created"; path: string; dir: boolean }
+  | { kind: "deleted"; path: string }
+  | { kind: "renamed"; from: string; to: string }
   | { kind: "key_created" | "key_deleted"; key: string }
   | { kind: "value_set" | "value_deleted"; key: string; name: string }
   | { kind: "process_started"; image: string; followed: boolean }

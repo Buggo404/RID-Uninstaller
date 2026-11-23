@@ -12,7 +12,6 @@ const emit = defineEmits<{ close: [changed: boolean] }>();
 const dialog = ref<HTMLDialogElement>();
 const logEl = ref<HTMLElement>();
 const step = ref<"setup" | "running" | "result">("setup");
-const driver = ref<"ready" | "installed" | "not_installed" | "checking">("checking");
 const path = ref(props.initialPath ?? "");
 const args = ref("");
 const log = ref<string[]>([]);
@@ -33,9 +32,6 @@ async function guarded(work: () => Promise<void>) {
   }
   busy.value = false;
 }
-
-const checkDriver = () => api.driverStatus().then((s) => (driver.value = s), report);
-const installDriver = () => guarded(async () => (await api.driverInstall(), void (await checkDriver())));
 
 async function browse() {
   const picked = await open({ multiple: false, filters: [{ name: t("tr.setupFilter"), extensions: ["exe", "msi", "msp"] }] });
@@ -92,10 +88,7 @@ const revert = () =>
     close();
   });
 
-onMounted(() => {
-  dialog.value?.showModal();
-  checkDriver();
-});
+onMounted(() => dialog.value?.showModal());
 </script>
 
 <template>
@@ -109,10 +102,6 @@ onMounted(() => {
     <h2 id="trace-title">{{ appendTo ? t("tr.titleAppend", appendTo.name) : t("tr.title") }}</h2>
 
     <template v-if="step === 'setup'">
-      <div v-if="driver === 'not_installed'" class="notice" role="alert">
-        <p>{{ t("tr.noDriver") }}</p>
-        <button type="button" class="btn" :disabled="busy" @click="installDriver">{{ t("tr.installDriver") }}</button>
-      </div>
       <form @submit.prevent="run">
         <div class="form">
           <label for="tr-path">{{ t("tr.path") }}</label>
@@ -127,7 +116,7 @@ onMounted(() => {
           <span class="note">{{ t("tr.hint") }}</span>
           <span class="spacer"></span>
           <button type="button" class="btn" @click="close">{{ t("btn.cancel") }}</button>
-          <button type="submit" class="btn primary" :disabled="busy || driver === 'not_installed' || driver === 'checking'">
+          <button type="submit" class="btn primary" :disabled="busy">
             {{ t("tr.install") }}
           </button>
         </div>

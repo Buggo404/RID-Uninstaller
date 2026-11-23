@@ -16,7 +16,7 @@ const USAGE: &str = "usage:
   rid remove-entry <name> [options]  remove only the entry from the installed-programs list
   rid history                      removals that can still be undone
   rid startup                      programs that start with Windows
-  rid trace '<command line>' [--msi]  run a setup program and record what it changes (needs the driver)
+  rid trace '<command line>' [--msi]  run a setup program and record what it changes (as administrator)
   rid context-menu on|off          add or remove Rid's entries in Explorer's right-click menu
   rid restore <batch>              undo a removal
   rid purge <batch>                delete a removal from quarantine for good
@@ -290,12 +290,12 @@ fn history() -> Result<(), Failure> {
     Ok(())
 }
 
-/// Runs a setup program under the RidMonitor driver and prints what it changed.
+/// Runs a setup program and prints what Windows reports it changed.
 fn trace(command: &str, follow_msiexec: bool) -> Result<(), Failure> {
     let recording = rid_core::trace::record(command, follow_msiexec, &AtomicBool::new(false), |event| {
         println!("{:>6} {}", event.pid, serde_json::to_string(&event.change).expect("plain data"));
     })
-    .map_err(|e| format!("{e} (is the RidMonitor driver loaded?)"))?;
+    .map_err(|e| e.to_string())?;
     eprintln!("{} events, {} dropped", recording.events.len(), recording.dropped);
     Ok(())
 }

@@ -7,7 +7,6 @@ pub const SERVER: &str = match option_env!("RID_SERVER") {
 
 pub mod ai;
 pub mod cmdline;
-pub mod driver;
 pub mod facts;
 pub mod icons;
 pub mod inventory;

@@ -10,7 +10,7 @@ use rid_core::ops::{self, BatchInfo, Report};
 use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
-use rid_core::{ai, driver, facts, icons, paths, rules, shell, startup, trace, traced, uninstall};
+use rid_core::{ai, facts, icons, paths, rules, shell, startup, trace, traced, uninstall};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Emitter, Manager};
@@ -21,11 +21,6 @@ type CmdResult<T = ()> = Result<T, String>;
 
 fn err(e: impl ToString) -> String {
     e.to_string()
-}
-
-/// The window has its own words for a driver Windows refuses for its signature.
-fn driver_err(e: std::io::Error) -> String {
-    if e.raw_os_error() == Some(driver::UNSIGNED) { "driver-unsigned".into() } else { err(e) }
 }
 
 #[derive(Default)]
@@ -119,41 +114,10 @@ fn dir_sizes(app: tauri::AppHandle, state: State, pass: u64, items: Vec<(String,
     });
 }
 
-#[tauri::command(async)]
-fn driver_status() -> driver::Status {
-    driver::status()
-}
-
-/// The Microsoft-signed driver, when the build was given one (RID_DRIVER, see build.rs).
-#[cfg(embedded_driver)]
-const DRIVER: Option<&[u8]> = Some(include_bytes!(env!("RID_DRIVER_FILE")));
-#[cfg(not(embedded_driver))]
-const DRIVER: Option<&[u8]> = None;
-
-/// Installs the driver carried in the program; a build without one looks for the file beside the executable.
-#[tauri::command(async)]
-fn driver_install() -> CmdResult {
-    let image = match DRIVER {
-        Some(bytes) => {
-            // Unpacked where only administrators can write: what gets installed is what was shipped.
-            let file = paths::secure_dir().map_err(err)?.join("RidMonitor.sys");
-            fs::write(&file, bytes).map_err(err)?;
-            file
-        }
-        None => std::env::current_exe().map_err(err)?.with_file_name("RidMonitor.sys"),
-    };
-    driver::install(&image).map_err(driver_err)
-}
-
-#[tauri::command(async)]
-fn driver_remove() -> CmdResult {
-    driver::remove().map_err(err)
-}
-
 #[derive(Serialize)]
 struct TraceResult {
     items: Vec<Target>,
-    /// Events the driver had to drop. Non-zero means the recording is incomplete.
+    /// Events Windows could not deliver. Non-zero means the recording is incomplete.
     dropped: u32,
     /// Programs that appeared in the installed list during the recording.
     new_apps: Vec<App>,
@@ -165,7 +129,6 @@ fn trace_run(app: tauri::AppHandle, state: State, path: String, arguments: Strin
     if !Path::new(&path).is_file() {
         return Err(format!("no such file: {path}"));
     }
-    driver::load().map_err(driver_err)?;
     let is_msi = Path::new(&path).extension().is_some_and(|x| x.eq_ignore_ascii_case("msi"));
     let command = match is_msi {
         true => format!("msiexec.exe /i \"{path}\" {arguments}"),
@@ -756,9 +719,6 @@ fn main() {
             startup_set_enabled,
             startup_delete,
             startup_add,
-            driver_status,
-            driver_install,
-            driver_remove,
             trace_run,
             trace_save,
             trace_revert,
