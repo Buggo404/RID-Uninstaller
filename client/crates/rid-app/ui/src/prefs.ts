@@ -4,7 +4,7 @@ import { api } from "./api";
 export type SortKey = "name" | "size" | "date" | "publisher" | "version";
 
 const defaults = {
-  lang: "auto" as "auto" | "en" | "zh",
+  lang: "auto" as "auto" | "en" | "zh" | "pt",
   theme: "auto" as "auto" | "light" | "dark",
   compact: false,
   /** Per table: the user's column order and the widths they dragged columns to. */

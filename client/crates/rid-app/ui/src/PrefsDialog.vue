@@ -23,6 +23,7 @@ const languages = computed(() => [
   { value: "auto" as const, label: t("view.langAuto") },
   { value: "zh" as const, label: "简体中文" },
   { value: "en" as const, label: "English" },
+  { value: "pt" as const, label: "Português (Brasil)" },
 ]);
 const themes = computed(() => [
   { value: "auto" as const, label: t("prefs.schemeAuto") },

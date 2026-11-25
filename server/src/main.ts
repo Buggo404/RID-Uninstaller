@@ -93,7 +93,7 @@ app.post<{ Body: { feature?: unknown; lang?: unknown; facts?: unknown } }>(
     if (!isFeature(feature) || !text) return reply.code(400).send({ error: "not a question this server answers" });
     const { upstream, prompts } = await aiConfig();
     if (!upstream) return reply.code(503).send({ error: "no model is configured on this server" });
-    const language = lang === "zh" ? "简体中文" : "English";
+    const language = lang === "zh" ? "简体中文" : lang === "pt" ? "Português do Brasil" : "English";
     // The same question about the same program is answered once: most people ask about the same programs.
     const key = createHash("sha256").update(JSON.stringify([feature, language, upstream.model, prompts[feature], text])).digest("hex");
     const known = await cachedAnswer(key);
