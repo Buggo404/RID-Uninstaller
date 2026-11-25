@@ -37,7 +37,7 @@
     "windows": {
       "nsis": {
         "installMode": "perMachine",
-        "languages": ["SimpChinese", "English"]
+        "languages": ["SimpChinese", "English", "PortugueseBR"]
       }
     }
   },

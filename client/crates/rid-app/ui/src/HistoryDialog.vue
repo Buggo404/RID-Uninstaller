@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { report } from "./actions";
 import { type BatchInfo, api, formatSize } from "./api";
-import { lang, t } from "./i18n";
+import { lang, locales, t } from "./i18n";
 import { confirmBox, notify } from "./ui";
 
 const emit = defineEmits<{ close: [changed: boolean] }>();
@@ -13,7 +13,7 @@ let changed = false;
 
 const load = () => api.quarantineList().then((b) => (batches.value = b), report);
 
-const when = (b: BatchInfo) => new Date(b.created * 1000).toLocaleString(lang.value === "zh" ? "zh-CN" : "en-US");
+const when = (b: BatchInfo) => new Date(b.created * 1000).toLocaleString(locales[lang.value]);
 
 async function act(work: () => Promise<void>) {
   busy.value = true;

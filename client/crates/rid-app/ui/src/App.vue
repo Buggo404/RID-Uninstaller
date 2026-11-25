@@ -7,7 +7,7 @@ import { actionItems, jump, report } from "./actions";
 import AiDialog from "./AiDialog.vue";
 import { type LaunchRequest, api, formatSize, targetText } from "./api";
 import HistoryDialog from "./HistoryDialog.vue";
-import { lang, t } from "./i18n";
+import { lang, locales, t } from "./i18n";
 import MenuList, { type MenuItem } from "./MenuList.vue";
 import { prefs, resetColumns } from "./prefs";
 import PrefsDialog from "./PrefsDialog.vue";
@@ -148,6 +148,7 @@ const menus = computed<{ label: string; items: MenuItem[] }[]>(() => [
           { label: t("view.langAuto"), checked: prefs.lang === "auto", run: () => (prefs.lang = "auto") },
           { label: "简体中文", checked: prefs.lang === "zh", run: () => (prefs.lang = "zh") },
           { label: "English", checked: prefs.lang === "en", run: () => (prefs.lang = "en") },
+          { label: "Português (Brasil)", checked: prefs.lang === "pt", run: () => (prefs.lang = "pt") },
         ],
       },
     ],
@@ -257,7 +258,7 @@ async function exportHtml() {
     .join("\n");
   const title = t("export.title", rows.value.length);
   const html = `<!doctype html>
-<html lang="${lang.value === "zh" ? "zh-CN" : "en"}"><head><meta charset="utf-8"><title>${esc(title)}</title>
+<html lang="${locales[lang.value]}"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>body{font:14px "Segoe UI",sans-serif;margin:24px}table{border-collapse:collapse}th,td{padding:4px 12px;border:1px solid #ccc;text-align:left}</style>
 </head><body><h1>${esc(title)}</h1>
 <table>
@@ -276,7 +277,7 @@ systemDark.addEventListener("change", (e) => (dark.value = e.matches));
 watchEffect(() => {
   const root = document.documentElement;
   root.dataset.theme = prefs.theme === "auto" ? (dark.value ? "dark" : "light") : prefs.theme;
-  root.lang = lang.value === "zh" ? "zh-CN" : "en";
+  root.lang = locales[lang.value];
   localStorage.setItem("rid.theme", root.dataset.theme);
 });
 
