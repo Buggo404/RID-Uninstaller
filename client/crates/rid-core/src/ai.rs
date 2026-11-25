@@ -21,7 +21,7 @@ pub const UNAVAILABLE: &str = "ai-unavailable";
 /// Too many questions in a short time.
 pub const BUSY: &str = "ai-busy";
 
-/// Asks `server` about `facts` for one `feature` (program, startup, leftover), answered in `lang` (zh or en).
+/// Asks `server` about `facts` for one `feature` (program, startup, leftover), answered in `lang` (zh, pt or en).
 pub fn ask(server: &str, feature: &str, lang: &str, facts: Map<String, Value>) -> Result<Answer, String> {
     if !allowed_server(server) {
         return Err("the server address must start with https://".into());
