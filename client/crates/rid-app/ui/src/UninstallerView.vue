@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { actionItems, askAbout, canUninstall, jump } from "./actions";
 import { type App, type InstallerInfo, SOURCES, api, appIcon, formatSize } from "./api";
 import { useColumns } from "./columns";
-import { type MsgKey, lang, t } from "./i18n";
+import { type MsgKey, lang, locales, t } from "./i18n";
 import { type SortKey, prefs } from "./prefs";
 import { type Row, category, current, filter, isRecent, loading, rows, selected, selection, setOpen, sizeOf, start } from "./store";
 import TableHead from "./TableHead.vue";
@@ -18,7 +18,7 @@ defineExpose({ focusList: () => listEl.value?.focus() });
 const cols = useColumns("uninstaller", () => [
   { key: "name", label: t("col.name"), width: 0, sortable: true },
   { key: "size", label: t("col.size"), width: 92, sortable: true, hidden: !prefs.columns.size },
-  { key: "date", label: t("col.date"), width: 124, sortable: true, hidden: !prefs.columns.date },
+  { key: "date", label: t("col.date"), width: 140, sortable: true, hidden: !prefs.columns.date },
   { key: "publisher", label: t("col.publisher"), width: 190, sortable: true, hidden: !prefs.columns.publisher },
   { key: "version", label: t("col.version"), width: 130, sortable: true, hidden: !prefs.columns.version },
   { key: "update", label: t("col.update"), width: 110, hidden: !prefs.columns.update },
@@ -57,7 +57,7 @@ function sortBy(key: string) {
 
 function formatDate(day: string | null): string {
   if (!day) return "";
-  return new Date(`${day}T00:00:00`).toLocaleDateString(lang.value === "zh" ? "zh-CN" : "en-US", {
+  return new Date(`${day}T00:00:00`).toLocaleDateString(locales[lang.value], {
     year: "numeric",
     month: "short",
     day: "2-digit",
