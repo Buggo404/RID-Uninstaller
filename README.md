@@ -59,7 +59,7 @@ RID 的做法是**每一项残留都要说得出理由，每一次删除都能�
 | **更新** | 把 WinGet、Scoop、Chocolatey、npm、pip、Cargo、.NET Tool、vcpkg 的可用更新集中列出，可单项或一键更新；程序列表里也能看到哪个程序有新版本 |
 | **安装方式** | 识别 MSI、Inno Setup、NSIS、WiX Burn、Squirrel 等，据此选用静默参数，安装追踪时自动填入 |
 
-界面支持简体中文和英文，深色、浅色跟随系统。
+界面支持简体中文、英文和巴西葡萄牙语（由 [stokeer](https://github.com/stokeer) 贡献），深色、浅色跟随系统。欢迎提交其他语言的翻译：只需要在 `client/crates/rid-app/ui/src/i18n.ts` 里加一张表。
 
 ## 为什么不会误删
 
@@ -188,4 +188,4 @@ RID Uninstaller removes Windows programs completely, and lets you take it back. 
 
 **Privacy.** The program goes online in three cases only: looking up leftover rules for a program you are scanning (sends its name), checking for updates, and when you choose "Ask AI" (sends that item's listed details such as name, version, publisher, install path and uninstall command, plus up to 40 file names from its folder, with your user name removed from paths). No account, no analytics, no telemetry. The server is in this repository too and can be self-hosted.
 
-The interface is in English and Simplified Chinese and follows the system's light or dark theme. Build it with `client\scripts\build.ps1`.
+The interface is in English, Simplified Chinese and Brazilian Portuguese (contributed by [stokeer](https://github.com/stokeer)) and follows the system's light or dark theme. Translations are welcome: a language is one more table in `client/crates/rid-app/ui/src/i18n.ts`. Build it with `client\scripts\build.ps1`.
