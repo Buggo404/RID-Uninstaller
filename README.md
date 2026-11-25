@@ -159,6 +159,10 @@ server/               规则库、更新、管理后台
 
 遇到问题请到 [Issues](https://github.com/Buggo404/RID-Uninstaller/issues) 提交。如果是误删或漏删，附上程序名称和相关路径会很有帮助——这类问题优先处理。
 
+## 致谢
+
+更新检查的思路参考了 [UniGetUI](https://github.com/Devolutions/UniGetUI)（MIT，C#）。RID 没有使用它的代码：包管理器的输出解析和命令拼装在 `client/crates/rid-core/src/updates.rs` 里用 Rust 重写，安装包类型的判断在 `installer.rs`。
+
 ## 许可证
 
 [MIT](LICENSE)
@@ -180,6 +184,7 @@ RID Uninstaller removes Windows programs completely, and lets you take it back. 
 - **Also:** force removal for broken uninstallers, batch and silent uninstall, Store apps, packages from Steam, Scoop and Chocolatey, a startup manager, an Explorer context menu, a command-line tool, and an optional "Ask AI" about any program or leftover.
 - **Updates in one place.** WinGet, Scoop, Chocolatey, npm, pip, Cargo, .NET Tool and vcpkg are checked side by side; install one or all, and the program list marks the programs that have a newer version.
 - **Installer detection.** MSI, Inno Setup, NSIS, WiX Burn and Squirrel are recognised, which is how the silent switches are chosen and how the install-and-trace dialog fills its arguments.
+- **Credits.** The idea of checking every package manager in one place follows [UniGetUI](https://github.com/Devolutions/UniGetUI) (MIT). None of its code is used: the output parsing and command building live in `updates.rs`, written in Rust for this project.
 
 **Privacy.** The program goes online in three cases only: looking up leftover rules for a program you are scanning (sends its name), checking for updates, and when you choose "Ask AI" (sends that item's listed details such as name, version, publisher, install path and uninstall command, plus up to 40 file names from its folder, with your user name removed from paths). No account, no analytics, no telemetry. The server is in this repository too and can be self-hosted.
 
