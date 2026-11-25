@@ -3,7 +3,19 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 export type Category = "apps" | "system" | "hidden" | "store" | "packages";
 
 /** Where a list entry comes from; shown as-is, these are product names. */
-export const SOURCES = { registry: "", store: "Microsoft Store", steam: "Steam", scoop: "Scoop", chocolatey: "Chocolatey" };
+export const SOURCES = {
+  registry: "",
+  store: "Microsoft Store",
+  steam: "Steam",
+  scoop: "Scoop",
+  chocolatey: "Chocolatey",
+  winget: "WinGet",
+  npm: "npm",
+  pip: "pip",
+  cargo: "Cargo",
+  dotnet: ".NET Tool",
+  vcpkg: "vcpkg",
+};
 
 export interface App {
   id: string;
@@ -25,12 +37,43 @@ export interface App {
   is_msi: boolean;
   is_32bit: boolean;
   traced: boolean;
+  /** A newer version a package manager offers, when this program is one of its packages. */
+  update: string | null;
   broken: boolean;
 }
 
 export interface Inventory {
   apps: App[];
   warnings: string[];
+}
+
+/** Which installer built a program or setup file (see `installer.rs`), with its silent switches. */
+export interface InstallerInfo {
+  kind: string;
+  silent_uninstall: string | null;
+  silent_install: string[];
+}
+
+/** One package with a newer version, as its package manager reported it. */
+export interface UpdateItem {
+  id: string;
+  source: keyof typeof SOURCES;
+  name: string;
+  installed: string;
+  available: string;
+}
+
+export interface UpdatesReport {
+  updates: UpdateItem[];
+  warnings: string[];
+  /** (program id, the update that belongs to it): which rows carry a badge. */
+  badges: [string, UpdateItem][];
+}
+
+export interface UpgradeResult {
+  id: string;
+  ok: boolean;
+  message: string;
 }
 
 export const api = {
@@ -54,6 +97,10 @@ export const api = {
   uninstallRun: (id: string, modify: boolean, quiet: boolean) =>
     invoke<RunResult>("uninstall_run", { id, modify, quiet }),
   quietSupport: (ids: string[]) => invoke<boolean[]>("quiet_support", { ids }),
+  installerOf: (id: string) => invoke<InstallerInfo | null>("installer_of", { id }),
+  installerHint: (path: string) => invoke<InstallerInfo>("installer_hint", { path }),
+  updatesList: () => invoke<UpdatesReport>("updates_list"),
+  upgradeRun: (updates: UpdateItem[]) => invoke<UpgradeResult[]>("upgrade_run", { updates }),
   uninstallCancel: () => invoke<void>("uninstall_cancel"),
   scanLeftovers: (ids: string[]) => invoke<Leftover[]>("scan_leftovers", { ids }),
   processes: (ids: string[]) => invoke<Proc[]>("processes", { ids }),

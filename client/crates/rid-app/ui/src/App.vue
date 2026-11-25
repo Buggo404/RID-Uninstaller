@@ -23,6 +23,7 @@ import {
   recentCount,
   refresh,
   refreshStartup,
+  refreshUpdates,
   rows,
   selected,
   sizing,
@@ -31,10 +32,12 @@ import {
   totalKb,
   tracedView,
   tracing,
+  upgrades,
   view,
 } from "./store";
 import StartupView from "./StartupView.vue";
 import TraceDialog from "./TraceDialog.vue";
+import UpdatesView from "./UpdatesView.vue";
 import { asking, confirmBox, menu, notify, prompt, showMenu } from "./ui";
 import logo from "../../icons/128x128.png";
 import UninstallerView from "./UninstallerView.vue";
@@ -96,6 +99,7 @@ const glyphs = {
   packages: "M4 8l8-4 8 4-8 4z M4 8v8l8 4 8-4V8 M12 12v8",
   recent: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
   trace: "M12 3v10 M8 9l4 4 4-4 M4 17v3h16v-3",
+  updates: "M20 12a8 8 0 1 1-2.3-5.7 M20 4v5h-5",
   sidebar: "M4 5h16v14H4z M9.5 5v14",
   details: "M4 5h16v14H4z M14.5 5v14",
   quarantine: "M4 8h16v11H4z M3 4h18v4H3z M10 12h4",
@@ -129,7 +133,7 @@ const menus = computed<{ label: string; items: MenuItem[] }[]>(() => [
     items: [
       {
         label: t("view.columns"),
-        children: (["size", "date", "publisher", "version", "traced"] as const).map((c) => ({
+        children: (["size", "date", "publisher", "version", "update", "traced"] as const).map((c) => ({
           label: t(`col.${c}`),
           checked: prefs.columns[c],
           run: () => (prefs.columns[c] = !prefs.columns[c]),
@@ -206,6 +210,7 @@ const counts = computed(() => Object.fromEntries(categories.map((c) => [c.id, in
 const moreItems = computed<MenuItem[]>(() => menus.value.map((m) => ({ label: m.label, children: m.items, disabled: !m.items.length })));
 const title = computed(() => {
   if (view.value === "startup") return t("tb.startup");
+  if (view.value === "updates") return t("nav.updates");
   return category.value === "recent" ? t("cat.recent", recentCount.value) : t(`cat.${category.value}`);
 });
 
@@ -221,7 +226,8 @@ async function reload() {
   // The icon makes at least one full turn, so even an instant refresh is seen to have happened.
   const turn = new Promise((done) => setTimeout(done, 600));
   try {
-    await (view.value === "startup" ? refreshStartup() : refresh());
+    if (view.value === "updates") await refreshUpdates();
+    else await (view.value === "startup" ? refreshStartup() : refresh());
   } catch (e) {
     report(e);
   } finally {
@@ -383,6 +389,17 @@ onUnmounted(() => removeEventListener("keydown", onKey));
       </button>
 
       <div class="nav-label">{{ t("nav.tools") }}</div>
+      <button
+        type="button"
+        class="nav"
+        :class="{ active: view === 'updates' }"
+        :title="tip(t('nav.updates'))"
+        @click="view = 'updates'"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.updates" /></svg>
+        <span class="nav-text">{{ t("nav.updates") }}</span>
+        <span class="count">{{ upgrades.items.length || "" }}</span>
+      </button>
       <button type="button" class="nav" :class="{ active: view === 'startup' }" :title="tip(t('tb.startup'))" @click="view = 'startup'">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="glyphs.startup" /></svg>
         <span class="nav-text">{{ t("tb.startup") }}</span>
@@ -485,13 +502,18 @@ onUnmounted(() => removeEventListener("keydown", onKey));
       </header>
 
       <UninstallerView v-if="view === 'uninstaller'" ref="uninstaller" />
-      <StartupView v-else />
+      <StartupView v-else-if="view === 'startup'" />
+      <UpdatesView v-else />
 
       <footer class="status" role="status">
         <template v-if="view === 'uninstaller'">
           <span>{{ t("status.total", rows.length, formatSize(totalKb) || "0 KB") }}</span>
           <span v-if="sizing">{{ t("status.sizing") }}</span>
           <span v-if="inv.warnings.length" :title="inv.warnings.join('\n')">{{ t("status.warnings", inv.warnings.length) }}</span>
+        </template>
+        <template v-else-if="view === 'updates'">
+          <span>{{ upgrades.loading ? t("upd.checking") : t("upd.total", upgrades.items.length) }}</span>
+          <span v-if="upgrades.warnings.length" :title="upgrades.warnings.join('\n')">{{ t("status.warnings", upgrades.warnings.length) }}</span>
         </template>
         <span v-else>{{ t("st.total", startup.items.length, startup.items.filter((i) => i.status === "running").length) }}</span>
       </footer>

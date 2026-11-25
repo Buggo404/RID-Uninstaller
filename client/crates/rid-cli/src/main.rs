@@ -16,6 +16,8 @@ const USAGE: &str = "usage:
   rid remove-entry <name> [options]  remove only the entry from the installed-programs list
   rid history                      removals that can still be undone
   rid startup                      programs that start with Windows
+  rid update [--json]              packages a package manager can update
+  rid update --all                 install every one of those updates
   rid trace '<command line>' [--msi]  run a setup program and record what it changes (as administrator)
   rid context-menu on|off          add or remove Rid's entries in Explorer's right-click menu
   rid restore <batch>              undo a removal
@@ -72,6 +74,8 @@ fn main() -> ExitCode {
         }
         ["restore", batch] => restore(batch),
         ["purge", batch] => ops::purge(batch).map(|at_restart| at_restart.iter().for_each(|f| println!("in use, deleted at the next restart: {f}"))).map_err(|e| e.to_string()),
+        ["update"] if has("--all") => update_all(),
+        ["update"] => updates(has("--json")),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
@@ -288,6 +292,53 @@ fn history() -> Result<(), Failure> {
         println!("{}  {} items, {} KB  {}", b.id, b.items, b.size_kb, b.label);
     }
     Ok(())
+}
+
+/// Packages that have a newer version, one per line: `SOURCE  name  installed -> available`.
+fn updates(json: bool) -> Result<(), Failure> {
+    let found = rid_core::updates::list();
+    if json {
+        print_json(&found);
+    } else {
+        for u in &found.updates {
+            println!("{:<11} {:<40.40} {} -> {}", format!("{:?}", u.source), u.name, u.installed, u.available);
+        }
+    }
+    for warning in &found.warnings {
+        eprintln!("warning: {warning}");
+    }
+    Ok(())
+}
+
+/// Installs every update, stopping at the first one the package manager refuses.
+fn update_all() -> Result<(), Failure> {
+    let found = rid_core::updates::list();
+    let cancel = AtomicBool::new(false);
+    let mut failures = 0;
+    for update in &found.updates {
+        let Some(command) = rid_core::updates::upgrade_command(update) else {
+            eprintln!("no upgrade command for {}", update.id);
+            failures += 1;
+            continue;
+        };
+        print!("{:<40.40} ", update.name);
+        let _ = io::stdout().flush();
+        match uninstall::run(&command, &cancel) {
+            Ok(outcome) if outcome.exit_code == 0 => println!("ok"),
+            Ok(outcome) => {
+                println!("failed (exit code {})", outcome.exit_code);
+                failures += 1;
+            }
+            Err(e) => {
+                println!("failed ({e})");
+                failures += 1;
+            }
+        }
+    }
+    match failures {
+        0 => Ok(()),
+        n => Err(format!("{n} updates failed")),
+    }
 }
 
 /// Runs a setup program and prints what Windows reports it changed.

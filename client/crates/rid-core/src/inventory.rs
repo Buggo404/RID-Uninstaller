@@ -1,6 +1,6 @@
 //! Installed programs, read from the Uninstall registry keys and the current user's AppX packages.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use windows::ApplicationModel::{Package, PackageSignatureKind};
 use windows::Management::Deployment::PackageManager;
 use windows::core::HSTRING;
@@ -27,7 +27,7 @@ pub enum Category {
     Packages,
 }
 
-#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     /// The Windows installed-programs list.
@@ -37,6 +37,13 @@ pub enum Source {
     Steam,
     Scoop,
     Chocolatey,
+    /// Also listed by the Windows installed-programs list; WinGet is only the one that updates it.
+    Winget,
+    Npm,
+    Pip,
+    Cargo,
+    Dotnet,
+    Vcpkg,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -65,6 +72,8 @@ pub struct App {
     pub is_32bit: bool,
     /// An install recording exists for this program. Set by the caller from `traced::list`.
     pub traced: bool,
+    /// A newer version the package manager offers. Set by the caller from `updates::attach`.
+    pub update: Option<String>,
     /// The entry points at an uninstaller and folder that are both gone: a stale list entry.
     pub broken: bool,
 }
@@ -251,6 +260,7 @@ fn registry_app(key: &RegKey, hive: &str, key_name: &str, is_32bit: bool) -> Opt
         is_32bit,
         source: if key_name.starts_with("Steam App ") { Source::Steam } else { Source::Registry },
         traced: false,
+        update: None,
         broken: !is_msi && is_stale(&text("UninstallString"), text("InstallLocation").trim_matches('"')),
     })
 }
@@ -326,6 +336,7 @@ fn appx_app(pkg: &Package) -> windows::core::Result<Option<App>> {
         is_32bit: false,
         source: Source::Store,
         traced: false,
+        update: None,
         broken: false,
     }))
 }

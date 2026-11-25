@@ -2,7 +2,7 @@ import { computed } from "vue";
 import { type App, api, appIcon } from "./api";
 import { t } from "./i18n";
 import type { MenuItem } from "./MenuList.vue";
-import { current, refresh, selection, start, tracedView, tracing } from "./store";
+import { current, refresh, selection, start, tracedView, tracing, upgradeJob, upgradeOf, upgradePackages } from "./store";
 import { asking, confirmBox, notify } from "./ui";
 
 export const canUninstall = (a: App) => a.category === "store" || a.uninstall_string !== "";
@@ -37,6 +37,20 @@ export const actionItems = computed<MenuItem[]>(() => {
       run: () => start("uninstall"),
     },
     { label: t("act.modify"), disabled: !one?.modify_path, run: () => start("modify") },
+    {
+      label: one?.update ? t("act.updateTo", one.update) : t("act.update"),
+      disabled: !one?.update || upgradeJob.running,
+      run: () => {
+        const update = one && upgradeOf.get(one.id);
+        if (!update) return;
+        upgradePackages([update])
+          .then(() => {
+            const failed = upgradeJob.failures;
+            if (failed.length) report(failed.map((f) => `${f.name}: ${f.message}`).join("\n"));
+          })
+          .catch(report);
+      },
+    },
     {
       label: t(many ? "act.forceBatch" : "act.force"),
       key: "Shift+Del",

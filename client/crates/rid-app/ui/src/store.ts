@@ -1,12 +1,12 @@
 import { listen } from "@tauri-apps/api/event";
 import { computed, reactive, ref } from "vue";
-import { type App, type Category, type Inventory, type StartupItem, type TraceRecord, api } from "./api";
+import { type App, type Category, type Inventory, type StartupItem, type TraceRecord, type UpdateItem, type UpgradeResult, api } from "./api";
 import { prefs } from "./prefs";
 
 // shortcut: a fixed window of days, make it a preference if people ask for another.
 const RECENT_DAYS = 7;
 
-export type View = "uninstaller" | "startup";
+export type View = "uninstaller" | "startup" | "updates";
 export type ListCategory = Category | "recent";
 export type JobMode = "uninstall" | "modify" | "force" | "entry";
 
@@ -180,5 +180,77 @@ export async function refreshStartup() {
     startup.items = await api.startupList();
   } finally {
     startup.loading = false;
+  }
+}
+
+/** Packages with a newer version, from every package manager the machine has. */
+export const upgrades = reactive({
+  items: [] as UpdateItem[],
+  warnings: [] as string[],
+  loading: false,
+});
+
+/** The update that belongs to an installed program, so the program list can install it. */
+export const upgradeOf = reactive(new Map<string, UpdateItem>());
+
+const byName = (a: UpdateItem, b: UpdateItem) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+
+/** Progress and failures of the run in progress, so the window and the sidebar agree. */
+export const upgradeJob = reactive({
+  running: false,
+  done: 0,
+  total: 0,
+  current: "",
+  failures: [] as { id: string; name: string; message: string }[],
+});
+
+/**
+ * Installs `items` one after another; the backend reports each as it ends. Afterwards both the
+ * package list and the program list are read again, since versions have changed.
+ */
+export async function upgradePackages(items: UpdateItem[]) {
+  if (!items.length || upgradeJob.running) return;
+  Object.assign(upgradeJob, { running: true, done: 0, total: items.length, current: items[0].name, failures: [] });
+  const unlisten = await listen<UpgradeResult>("upgrade-done", ({ payload }) => {
+    upgradeJob.done++;
+    upgradeJob.current = items[upgradeJob.done]?.name ?? "";
+    if (!payload.ok) {
+      const name = items.find((i) => i.id === payload.id)?.name ?? payload.id;
+      upgradeJob.failures.push({ id: payload.id, name, message: payload.message });
+    }
+  });
+  try {
+    await api.upgradeRun(items);
+  } finally {
+    unlisten();
+    upgradeJob.running = false;
+    await Promise.all([refreshUpdates().catch(console.error), refresh().catch(console.error)]);
+  }
+}
+/** Checks every source at once. Each one is shown as soon as it answers, and the badges in the
+ * program list are filled in from the same check. */
+export async function refreshUpdates() {
+  upgrades.loading = true;
+  upgrades.items = [];
+  upgrades.warnings = [];
+  const unlisten = await listen<[string, UpdateItem[], string | null]>("updates-source", ({ payload: [, found, error] }) => {
+    if (error) upgrades.warnings.push(error);
+    if (found.length) upgrades.items = [...upgrades.items, ...found].sort(byName);
+  });
+  try {
+    const report = await api.updatesList();
+    upgrades.items = report.updates;
+    upgrades.warnings = report.warnings;
+    const apps = new Map(inv.value.apps.map((a) => [a.id, a]));
+    for (const app of apps.values()) app.update = null;
+    upgradeOf.clear();
+    for (const [id, item] of report.badges) {
+      upgradeOf.set(id, item);
+      const app = apps.get(id);
+      if (app) app.update = item.available;
+    }
+  } finally {
+    upgrades.loading = false;
+    unlisten();
   }
 }

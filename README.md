@@ -56,6 +56,8 @@ RID 的做法是**每一项残留都要说得出理由，每一次删除都能�
 | **右键菜单** | 在资源管理器里对快捷方式直接“卸载”，对安装包“安装并追踪” |
 | **AI 分析** | 右键任意程序、启动项或残留项选择“询问 AI”，根据名称、发布者和目录内容说明它是什么、做什么用 |
 | **命令行** | `rid list`、`rid scan`、`rid uninstall` 等，适合脚本和批量环境 |
+| **更新** | 把 WinGet、Scoop、Chocolatey、npm、pip、Cargo、.NET Tool、vcpkg 的可用更新集中列出，可单项或一键更新；程序列表里也能看到哪个程序有新版本 |
+| **安装方式** | 识别 MSI、Inno Setup、NSIS、WiX Burn、Squirrel 等，据此选用静默参数，安装追踪时自动填入 |
 
 界面支持简体中文和英文，深色、浅色跟随系统。
 
@@ -101,6 +103,7 @@ RID 的做法是**每一项残留都要说得出理由，每一次删除都能�
 | --- | --- |
 | 卸载、残留扫描、隔离区、启动项、右键菜单、命令行 | 可用 |
 | 安装追踪 | 可用；MSI 安装包的追踪测试还不充分 |
+| 更新检查与一键更新 | 可用；WinGet 的列表靠解析它的表格，界面是英文或中文时最稳 |
 | AI 分析 | 可用；模型在服务端后台配置（兼容 OpenAI 与 Anthropic 接口），提示词可按功能分别修改 |
 | 代码签名、WinGet、ARM64、更多语言 | 计划中 |
 
@@ -175,6 +178,8 @@ RID Uninstaller removes Windows programs completely, and lets you take it back. 
 - **Everything can be undone.** Removed files and registry keys go to a quarantine and can be restored as a whole.
 - **Install tracing without a driver.** Run a setup program through RID and it records every file and registry key the setup creates, using Windows' own event tracing (ETW).
 - **Also:** force removal for broken uninstallers, batch and silent uninstall, Store apps, packages from Steam, Scoop and Chocolatey, a startup manager, an Explorer context menu, a command-line tool, and an optional "Ask AI" about any program or leftover.
+- **Updates in one place.** WinGet, Scoop, Chocolatey, npm, pip, Cargo, .NET Tool and vcpkg are checked side by side; install one or all, and the program list marks the programs that have a newer version.
+- **Installer detection.** MSI, Inno Setup, NSIS, WiX Burn and Squirrel are recognised, which is how the silent switches are chosen and how the install-and-trace dialog fills its arguments.
 
 **Privacy.** The program goes online in three cases only: looking up leftover rules for a program you are scanning (sends its name), checking for updates, and when you choose "Ask AI" (sends that item's listed details such as name, version, publisher, install path and uninstall command, plus up to 40 file names from its folder, with your user name removed from paths). No account, no analytics, no telemetry. The server is in this repository too and can be self-hosted.
 

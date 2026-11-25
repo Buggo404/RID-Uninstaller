@@ -10,7 +10,7 @@ use rid_core::ops::{self, BatchInfo, Report};
 use rid_core::procs::{self, Proc};
 use rid_core::safety::Roots;
 use rid_core::scan::{self, Leftover, Target};
-use rid_core::{ai, facts, icons, paths, rules, shell, startup, trace, traced, uninstall};
+use rid_core::{ai, facts, icons, installer, paths, rules, shell, startup, trace, traced, uninstall, updates};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Emitter, Manager};
@@ -384,6 +384,76 @@ fn quiet_support(state: State, ids: Vec<String>) -> CmdResult<Vec<bool>> {
     Ok(known(&state, &ids)?.iter().map(|a| uninstall::quiet_command(a).is_some()).collect())
 }
 
+/// Which installer built a program, for the details panel.
+#[tauri::command(async)]
+fn installer_of(state: State, id: String) -> CmdResult<Option<installer::Description>> {
+    let app = known(&state, std::slice::from_ref(&id))?.remove(0);
+    Ok(installer::of_program(&app.uninstall_string, app.is_msi))
+}
+
+/// Which installer built a setup file, and the arguments that make it run unattended.
+#[tauri::command(async)]
+fn installer_hint(path: String) -> installer::Description {
+    installer::describe_file(&path)
+}
+
+#[derive(Serialize)]
+struct UpdatesReport {
+    updates: Vec<updates::Update>,
+    warnings: Vec<String>,
+    /// (program id, the update that belongs to it): what the program list shows.
+    badges: Vec<(String, updates::Update)>,
+}
+
+/// Checks every package manager. Each source is reported as it answers, so the window can
+/// fill in while pip is still thinking.
+#[tauri::command(async)]
+fn updates_list(app: tauri::AppHandle, state: State) -> CmdResult<UpdatesReport> {
+    let found = updates::list_with(|source, result| {
+        let list = result.as_ref().map(Vec::as_slice).unwrap_or_default();
+        let _ = app.emit("updates-source", (source.to_string(), list.to_vec(), result.as_ref().err().cloned()));
+    });
+    let mut apps = state.apps.lock().map_err(err)?.clone();
+    let badges = updates::attach(&mut apps, &found.updates);
+    Ok(UpdatesReport { updates: found.updates, warnings: found.warnings, badges })
+}
+
+#[derive(Serialize, Clone)]
+struct UpgradeResult {
+    id: String,
+    ok: bool,
+    message: String,
+}
+
+/// Installs the newer versions one after another, reporting each as it finishes.
+#[tauri::command(async)]
+fn upgrade_run(app: tauri::AppHandle, state: State, updates: Vec<updates::Update>) -> CmdResult<Vec<UpgradeResult>> {
+    state.cancel.store(false, Ordering::Relaxed);
+    let mut results = Vec::new();
+    for update in updates {
+        let id = update.id.clone();
+        let (ok, message) = match updates::upgrade_command(&update) {
+            None => (false, "no upgrade command for this package".to_string()),
+            Some(command) => match uninstall::run(&command, &state.cancel) {
+                Ok(outcome) if outcome.cancelled => (false, "cancelled".to_string()),
+                Ok(outcome) if outcome.exit_code == 0 => (true, String::new()),
+                Ok(outcome) => (false, format!("exit code {}", outcome.exit_code)),
+                Err(e) => (false, err(e)),
+            },
+        };
+        let cancelled = message == "cancelled";
+        let result = UpgradeResult { id, ok, message };
+        let _ = app.emit("upgrade-done", result.clone());
+        results.push(result);
+        if cancelled {
+            break;
+        }
+    }
+    // The installed versions have changed: read them again for the next list.
+    inventory::warm_up();
+    Ok(results)
+}
+
 #[derive(Serialize)]
 struct Found {
     app_id: String,
@@ -709,6 +779,10 @@ fn main() {
             uninstall_run,
             uninstall_cancel,
             quiet_support,
+            installer_of,
+            installer_hint,
+            updates_list,
+            upgrade_run,
             scan_leftovers,
             processes,
             kill_processes,

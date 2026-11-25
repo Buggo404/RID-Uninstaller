@@ -9,6 +9,7 @@ pub mod ai;
 pub mod cmdline;
 pub mod facts;
 pub mod icons;
+pub mod installer;
 pub mod inventory;
 pub mod links;
 pub mod msi;
@@ -28,3 +29,4 @@ pub mod traced;
 #[cfg(test)]
 mod testutil;
 pub mod uninstall;
+pub mod updates;

@@ -619,6 +619,11 @@ mark {
   color: var(--faint);
 }
 
+/* A newer version is waiting: the one thing on the row that is not just information. */
+.available {
+  color: var(--ok);
+}
+
 .traced-mark,
 .status-dot {
   display: inline-block;

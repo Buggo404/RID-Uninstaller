@@ -1,6 +1,7 @@
 //! Runs a program's own uninstaller and waits for everything it starts.
 
 use std::io;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -128,15 +129,9 @@ pub fn quiet_command(app: &App) -> Option<String> {
         return Some(format!("MsiExec.exe /X{key_name} /qn /norestart"));
     }
     let exe = crate::cmdline::exe_of(&app.uninstall_string)?;
-    if key_name.ends_with("_is1") {
-        // Inno Setup always registers its entries with this suffix.
-        return Some(format!("{} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART", app.uninstall_string));
-    }
-    // NSIS uninstallers carry the stub's manifest identity near the start of the file.
-    let mut head = vec![0u8; 2 * 1024 * 1024];
-    let read = std::fs::File::open(exe).and_then(|mut f| io::Read::read(&mut f, &mut head)).ok()?;
-    let nsis = b"Nullsoft.NSIS";
-    head[..read].windows(nsis.len()).any(|w| w == nsis).then(|| format!("{} /S", app.uninstall_string))
+    let installer = crate::installer::Installer::detect(Path::new(exe), false);
+    // Inno Setup registers its entries with an `_is1` suffix, which outlives a damaged file.
+    installer.silent_uninstall(&app.uninstall_string, key_name.ends_with("_is1"))
 }
 
 /// Hands the removal to Steam, which asks the user itself, and waits until Steam has dropped

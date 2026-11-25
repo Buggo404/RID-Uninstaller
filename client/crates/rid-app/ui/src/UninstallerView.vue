@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { actionItems, askAbout, canUninstall, jump } from "./actions";
-import { type App, SOURCES, appIcon, formatSize } from "./api";
+import { type App, type InstallerInfo, SOURCES, api, appIcon, formatSize } from "./api";
 import { useColumns } from "./columns";
 import { type MsgKey, lang, t } from "./i18n";
 import { type SortKey, prefs } from "./prefs";
@@ -21,6 +21,7 @@ const cols = useColumns("uninstaller", () => [
   { key: "date", label: t("col.date"), width: 124, sortable: true, hidden: !prefs.columns.date },
   { key: "publisher", label: t("col.publisher"), width: 190, sortable: true, hidden: !prefs.columns.publisher },
   { key: "version", label: t("col.version"), width: 130, sortable: true, hidden: !prefs.columns.version },
+  { key: "update", label: t("col.update"), width: 110, hidden: !prefs.columns.update },
   { key: "traced", label: t("col.traced"), width: 64, hidden: !prefs.columns.traced },
 ]);
 const span = computed(() => cols.columns.length + (cols.filler ? 1 : 0));
@@ -118,6 +119,23 @@ const categoryName = computed(() => {
 });
 
 const hasIcon = (a: App) => !brokenIcons.value.has(a.id);
+
+/** Which installer built the selected program; read on demand, since it means opening its uninstaller. */
+const installer = ref<InstallerInfo | null>(null);
+watch(
+  () => current.value?.id,
+  (id) => {
+    installer.value = null;
+    if (!id) return;
+    api
+      .installerOf(id)
+      .then((found) => {
+        if (current.value?.id === id) installer.value = found;
+      })
+      .catch(() => {});
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -155,6 +173,7 @@ const hasIcon = (a: App) => !brokenIcons.value.has(a.id);
                   {{ nameParts(row.app.name)[0] }}<mark>{{ nameParts(row.app.name)[1] }}</mark
                   >{{ nameParts(row.app.name)[2] }}
                   <span v-if="prefs.mark32 && row.app.is_32bit" class="bits">{{ t("list.bit32") }}</span>
+                  <span v-if="row.app.update" class="bits" :title="t('upd.availableOf', row.app.update)">↑</span>
                   <span v-if="row.app.broken" class="bits">{{ t("list.broken") }}</span>
                 </span>
               </div>
@@ -162,6 +181,9 @@ const hasIcon = (a: App) => !brokenIcons.value.has(a.id);
               <template v-else-if="c.key === 'date'">{{ formatDate(row.app.install_date) }}</template>
               <template v-else-if="c.key === 'publisher'">{{ row.app.publisher }}</template>
               <template v-else-if="c.key === 'version'">{{ row.app.version }}</template>
+              <template v-else-if="c.key === 'update'">
+                <span v-if="row.app.update" class="available">{{ row.app.update }}</span>
+              </template>
               <span v-else-if="c.key === 'traced' && row.app.traced" class="traced-mark" role="img" :aria-label="t('col.traced')"></span>
             </td>
             <td v-if="cols.filler"></td>
@@ -217,6 +239,10 @@ const hasIcon = (a: App) => !brokenIcons.value.has(a.id);
           <template v-if="sizeOf(current)">
             <dt>{{ t("col.size") }}</dt>
             <dd>{{ formatSize(sizeOf(current)) }}</dd>
+          </template>
+          <template v-if="installer && installer.kind !== 'unknown'">
+            <dt>{{ t("panel.installer") }}</dt>
+            <dd>{{ t(`inst.${installer.kind}` as MsgKey) }}</dd>
           </template>
         </dl>
         <button v-if="current.install_location" type="button" class="link" @click="jump.folder()">{{ current.install_location }}</button>

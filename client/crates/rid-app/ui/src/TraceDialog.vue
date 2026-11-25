@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { nextTick, onMounted, ref } from "vue";
 import { report } from "./actions";
-import { type App, type TraceEvent, type TraceResult, api, targetText } from "./api";
+import { type App, type InstallerInfo, type TraceEvent, type TraceResult, api, targetText } from "./api";
 import { type MsgKey, t } from "./i18n";
 
 const props = defineProps<{ appendTo?: App; initialPath?: string }>();
@@ -19,6 +19,7 @@ const result = ref<TraceResult | null>(null);
 const mainId = ref("");
 const customName = ref("");
 const busy = ref(false);
+const hint = ref<InstallerInfo | null>(null);
 let changed = false;
 
 const close = () => dialog.value?.close();
@@ -35,7 +36,14 @@ async function guarded(work: () => Promise<void>) {
 
 async function browse() {
   const picked = await open({ multiple: false, filters: [{ name: t("tr.setupFilter"), extensions: ["exe", "msi", "msp"] }] });
-  if (typeof picked === "string") path.value = picked;
+  if (typeof picked === "string") await use(picked);
+}
+
+/** Fills in the silent arguments of a recognised setup file; they stay editable. */
+async function use(file: string) {
+  path.value = file;
+  hint.value = await api.installerHint(file).catch(() => null);
+  if (!args.value.trim() && hint.value?.silent_install.length) args.value = hint.value.silent_install.join(" ");
 }
 
 function line(e: TraceEvent): string {
@@ -88,7 +96,10 @@ const revert = () =>
     close();
   });
 
-onMounted(() => dialog.value?.showModal());
+onMounted(() => {
+  dialog.value?.showModal();
+  if (path.value) void use(path.value);
+});
 </script>
 
 <template>
@@ -111,6 +122,7 @@ onMounted(() => dialog.value?.showModal());
           </div>
           <label for="tr-args">{{ t("tr.args") }}</label>
           <input id="tr-args" v-model="args" class="input" type="text" spellcheck="false" />
+          <p v-if="hint && hint.kind !== 'unknown'" class="note">{{ t("tr.detected", t(`inst.${hint.kind}` as MsgKey)) }}</p>
         </div>
         <div class="dialog-buttons">
           <span class="note">{{ t("tr.hint") }}</span>
